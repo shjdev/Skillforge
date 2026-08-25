@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; }
+  * { box-sizing: border-box; }
+  input, select, textarea, button { font-family: inherit; }
+  a { color: oklch(0.585 0.145 45); text-decoration: none; }
+  a:hover { color: oklch(0.48 0.15 45); text-decoration: underline; }
+  ::selection { background: oklch(0.585 0.145 45 / 0.22); }
+  .noscroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:oklch(0.905 0.010 82);font-family:'IBM Plex Mono',ui-monospace,monospace;color:oklch(0.235 0.014 60);display:flex;gap:40px;padding:40px 44px 60px;align-items:flex-start">
+
+  <div style="width:250px;flex:0 0 auto;position:sticky;top:40px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="width:11px;height:11px;background:oklch(0.585 0.145 45)"></div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:0.20em">SKILLFORGE</span>
+    </div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:30px;font-weight:300;line-height:1.1;margin-bottom:10px">Version mobile,<br />définitive.</div>
+    <div style="font-size:11px;line-height:1.7;color:oklch(0.45 0.012 60);margin-bottom:26px;text-wrap:pretty">Phase 1 — usage principalement mobile. 390 × 844 pt. Cibles tactiles ≥ 48 pt, corps de texte ≥ 15 pt. Toutes les vues sont cliquables.</div>
+
+    <div style="font-size:9px;letter-spacing:0.18em;color:oklch(0.55 0.012 60);margin-bottom:9px">APPRENANT</div>
+    <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:20px">
+      <sc-for list="{{ navLearner }}" as="n" hint-placeholder-count="8">
+        <button onClick="{{ n.action }}" style="{{ n.style }}">
+          <span style="{{ n.dot }}"></span>
+          <span style="{{ n.text }}">{{ n.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="font-size:9px;letter-spacing:0.18em;color:oklch(0.55 0.012 60);margin-bottom:9px">ADMINISTRATION</div>
+    <div style="display:flex;flex-direction:column;gap:1px">
+      <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="2">
+        <button onClick="{{ n.action }}" style="{{ n.style }}">
+          <span style="{{ n.dot }}"></span>
+          <span style="{{ n.text }}">{{ n.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:14px">
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <span style="font-size:10px;letter-spacing:0.18em;color:oklch(0.45 0.012 60)">{{ screenCode }}</span>
+      <span style="font-size:11px;color:oklch(0.50 0.012 60)">{{ screenNote }}</span>
+    </div>
+
+    <div style="width:390px;height:844px;flex:0 0 auto;border:1px solid oklch(0.235 0.014 60);border-radius:38px;overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 26px 60px -30px oklch(0.235 0.014 60 / 0.55);background:{{ shellBg }}">
+
+      <div style="{{ statusStyle }}">
+        <span style="font-variant-numeric:tabular-nums">9:41</span>
+        <div style="flex:1"></div>
+        <span style="letter-spacing:0.1em">SKILLFORGE</span>
+        <div style="flex:1"></div>
+        <span style="letter-spacing:0.06em">100 %</span>
+      </div>
+
+      <div class="noscroll" style="{{ bodyStyle }}">
+
+        <sc-if value="{{ vAccueil }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:22px 20px 26px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+            <div>
+              <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:8px">LUNDI 24 AOÛT</div>
+              <div style="font-family:'Newsreader',Georgia,serif;font-size:34px;font-weight:300;line-height:1">Bonjour,<br />{{ firstName }}.</div>
+            </div>
+            <div style="width:44px;height:44px;border:1px solid oklch(0.235 0.014 60);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:0 0 auto">{{ initials }}</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:oklch(0.885 0.012 78);border:1px solid oklch(0.885 0.012 78);margin-bottom:22px">
+            <div style="background:oklch(0.983 0.005 85);padding:16px 16px 18px">
+              <div style="font-size:9px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:10px">SÉRIE</div>
+              <div style="display:flex;align-items:baseline;gap:7px"><span style="font-size:30px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums">{{ streak }}</span><span style="font-size:12px;color:oklch(0.50 0.012 60)">jours</span></div>
+              <div style="display:flex;gap:4px;align-items:flex-end;margin-top:12px">
+                <sc-for list="{{ weekMarks }}" as="m" hint-placeholder-count="7"><div style="{{ m.style }}"></div></sc-for>
+              </div>
+            </div>
+            <div style="background:oklch(0.983 0.005 85);padding:16px 16px 18px">
+              <div style="font-size:9px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:10px">CAPITAL</div>
+              <div style="display:flex;align-items:baseline;gap:7px"><span style="font-size:30px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums">{{ pointsFmt }}</span><span style="font-size:12px;color:oklch(0.50 0.012 60)">pts</span></div>
+              <div style="font-size:11px;color:oklch(0.50 0.012 60);margin-top:14px;line-height:1.5">{{ sessionsDone }} sessions · 91 %</div>
+            </div>
+          </div>
+
+          <div style="border:1px solid oklch(0.235 0.014 60);padding:20px 18px 20px;margin-bottom:26px">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+              <div style="width:10px;height:10px;background:oklch(0.585 0.145 45)"></div>
+              <span style="font-size:10px;letter-spacing:0.16em;color:oklch(0.585 0.145 45)">FOYER ALLUMÉ · UN SEUL</span>
+            </div>
+            <div style="font-family:'Newsreader',Georgia,serif;font-size:26px;line-height:1.15;margin-bottom:8px">Réseau — Modèle OSI et TCP/IP</div>
+            <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;margin-bottom:18px;text-wrap:pretty">Les quatre autres domaines restent verrouillés jusqu'au quiz de validation.</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;letter-spacing:0.12em;color:oklch(0.50 0.012 60);margin-bottom:8px"><span>PROGRESSION</span><span style="color:oklch(0.235 0.014 60);font-weight:600">6 / 12</span></div>
+            <div style="display:flex;gap:3px;margin-bottom:20px">
+              <sc-for list="{{ lessonTicks }}" as="t" hint-placeholder-count="12"><div style="{{ t.style }}"></div></sc-for>
+            </div>
+            <button onClick="{{ go.lecon }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;background:oklch(0.235 0.014 60);color:oklch(0.963 0.008 85);font-size:12px;letter-spacing:0.16em;padding:18px 0" style-hover="background:oklch(0.585 0.145 45)">REPRENDRE · 30 MIN</button>
+          </div>
+
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:2px">
+            <span style="font-size:10px;letter-spacing:0.18em;font-weight:600">LES CINQ DOMAINES</span>
+            <div style="flex:1;height:1px;background:oklch(0.885 0.012 78)"></div>
+          </div>
+          <sc-for list="{{ domainsShort }}" as="d" hint-placeholder-count="5">
+            <button onClick="{{ d.action }}" style="{{ d.rowStyle }}">
+              <span style="font-size:11px;color:oklch(0.62 0.010 60);font-variant-numeric:tabular-nums;flex:0 0 auto">{{ d.num }}</span>
+              <span style="{{ d.nameStyle }}">{{ d.name }}</span>
+              <div style="flex:1"></div>
+              <div style="display:flex;gap:3px;flex:0 0 auto">
+                <sc-for list="{{ d.segs }}" as="s" hint-placeholder-count="5"><div style="{{ s.style }}"></div></sc-for>
+              </div>
+              <span style="{{ d.chipStyle }}">{{ d.state }}</span>
+            </button>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vDomaines }}">
+        <div style="padding:20px 20px 26px">
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:32px;font-weight:300;line-height:1.05;margin-bottom:8px">Les cinq domaines</div>
+          <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;margin-bottom:24px;text-wrap:pretty">Un seul foyer allumé à la fois. Touchez un domaine verrouillé pour savoir ce qui le débloque.</div>
+          <sc-for list="{{ domainsFull }}" as="d" hint-placeholder-count="5">
+            <button onClick="{{ d.action }}" style="{{ d.cardStyle }}">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <span style="font-size:11px;color:oklch(0.62 0.010 60);font-variant-numeric:tabular-nums">{{ d.num }}</span>
+                <span style="{{ d.chipStyle }}">{{ d.state }}</span>
+                <div style="flex:1"></div>
+                <span style="font-size:9px;letter-spacing:0.14em;color:oklch(0.60 0.010 60)">{{ d.levelLabel }}</span>
+              </div>
+              <div style="font-family:'Newsreader',Georgia,serif;font-size:24px;line-height:1.1;margin-bottom:7px">{{ d.name }}</div>
+              <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.6;margin-bottom:14px;text-wrap:pretty">{{ d.desc }}</div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="display:flex;gap:3px">
+                  <sc-for list="{{ d.segs }}" as="s" hint-placeholder-count="5"><div style="{{ s.style }}"></div></sc-for>
+                </div>
+                <div style="flex:1"></div>
+                <span style="{{ d.ctaStyle }}">{{ d.cta }}</span>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vVerrou }}">
+        <div style="height:100%;display:flex;flex-direction:column;background:repeating-linear-gradient(135deg, oklch(0.940 0.008 85) 0 10px, oklch(0.920 0.010 82) 10px 20px)">
+          <div style="flex:1;min-height:120px"></div>
+          <div style="background:oklch(0.983 0.005 85);border-top:1px solid oklch(0.235 0.014 60);padding:24px 20px 26px">
+            <div style="width:38px;height:3px;background:oklch(0.82 0.012 78);margin:0 auto 20px"></div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+              <div style="width:11px;height:11px;border:2px solid oklch(0.235 0.014 60)"></div>
+              <span style="font-size:10px;letter-spacing:0.18em">DOMAINE VERROUILLÉ</span>
+            </div>
+            <div style="font-family:'Newsreader',Georgia,serif;font-size:28px;line-height:1.12;margin-bottom:12px">Sécurité reste fermé pour l'instant</div>
+            <div style="font-size:13px;color:oklch(0.50 0.012 60);line-height:1.7;margin-bottom:22px;text-wrap:pretty">SkillForge ne laisse qu'un seul foyer allumé. <span style="color:oklch(0.235 0.014 60);font-weight:600">Réseau</span> est en cours : 6 leçons puis le quiz (seuil 70 %).</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:oklch(0.885 0.012 78);border:1px solid oklch(0.885 0.012 78);margin-bottom:22px">
+              <div style="background:oklch(0.983 0.005 85);padding:13px 12px"><div style="font-size:9px;letter-spacing:0.14em;color:oklch(0.60 0.010 60);margin-bottom:6px">RESTE</div><div style="font-size:15px;font-weight:600">6 leçons</div></div>
+              <div style="background:oklch(0.983 0.005 85);padding:13px 12px"><div style="font-size:9px;letter-spacing:0.14em;color:oklch(0.60 0.010 60);margin-bottom:6px">PUIS</div><div style="font-size:15px;font-weight:600">1 quiz</div></div>
+              <div style="background:oklch(0.983 0.005 85);padding:13px 12px"><div style="font-size:9px;letter-spacing:0.14em;color:oklch(0.60 0.010 60);margin-bottom:6px">ESTIM.</div><div style="font-size:15px;font-weight:600">3 jours</div></div>
+            </div>
+            <button onClick="{{ go.lecon }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;background:oklch(0.235 0.014 60);color:oklch(0.963 0.008 85);font-size:12px;letter-spacing:0.14em;padding:18px 0;margin-bottom:10px" style-hover="background:oklch(0.585 0.145 45)">REVENIR À RÉSEAU</button>
+            <button onClick="{{ go.domaines }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;font-size:11px;letter-spacing:0.14em;color:oklch(0.50 0.012 60);padding:14px 0">FERMER</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vLecon }}">
+        <div style="padding:20px 20px 24px">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:18px">
+            <div style="width:8px;height:8px;background:oklch(0.585 0.145 45)"></div>
+            <span style="font-size:10px;letter-spacing:0.16em;color:oklch(0.585 0.145 45)">MATIN · 30 MIN · LEÇON 6 / 12</span>
+          </div>
+          <div style="font-size:10px;letter-spacing:0.14em;color:oklch(0.60 0.010 60);margin-bottom:10px">RÉSEAU / MODÈLE OSI ET TCP/IP</div>
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:32px;font-weight:400;line-height:1.1;letter-spacing:-0.01em;margin-bottom:18px">Encapsulation et désencapsulation</div>
+          <div style="border-left:2px solid oklch(0.585 0.145 45);padding-left:13px;font-size:11px;line-height:1.65;color:oklch(0.50 0.012 60);margin-bottom:24px">Source de la leçon<br /><span style="font-family:'Newsreader',Georgia,serif;font-size:15px;font-style:italic;color:oklch(0.235 0.014 60)">Réseaux</span> <span style="color:oklch(0.235 0.014 60)">— A. S. Tanenbaum, chap. 1.4</span></div>
+
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.72;font-weight:300;color:oklch(0.28 0.014 60);text-wrap:pretty">
+            <p style="margin:0 0 18px">Chaque couche du modèle ajoute ses propres informations de contrôle au message reçu de la couche supérieure. Cette opération — l'encapsulation — transforme des données applicatives en segment, puis en paquet, puis en trame.</p>
+            <p style="margin:0 0 18px">À la réception, le mécanisme s'inverse : chaque couche retire l'en-tête qui la concerne et transmet le reste vers le haut. Cette symétrie stricte rend le modèle utile en diagnostic.</p>
+            <p style="margin:0 0 18px">Retenez la conséquence pratique : l'unité de données change de nom à chaque étage, et le surcoût s'accumule — environ 5 % de la charge utile part en en-têtes.</p>
+          </div>
+
+          <div style="margin-top:22px;border:1px solid oklch(0.885 0.012 78);background:oklch(0.983 0.005 85);padding:18px 16px">
+            <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:12px">CONCEPTS CLÉS</div>
+            <sc-for list="{{ concepts }}" as="c" hint-placeholder-count="4">
+              <div style="display:flex;gap:12px;padding:11px 0;border-top:1px solid oklch(0.910 0.010 78)">
+                <span style="font-size:10px;color:oklch(0.585 0.145 45);font-variant-numeric:tabular-nums;padding-top:3px;flex:0 0 auto">{{ c.n }}</span>
+                <div>
+                  <div style="font-size:13px;font-weight:600;margin-bottom:3px">{{ c.term }}</div>
+                  <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.6">{{ c.def }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ validated }}">
+          <div style="margin-top:20px;border:1px solid oklch(0.585 0.11 168);padding:16px;display:flex;gap:13px;align-items:flex-start">
+            <div style="width:9px;height:9px;background:oklch(0.585 0.11 168);margin-top:5px;flex:0 0 auto"></div>
+            <div style="font-size:13px;line-height:1.6">Session validée · <span style="font-weight:600">+40 points</span><br /><span style="color:oklch(0.50 0.012 60);font-size:11px">Prochaine leçon ce soir à {{ t2 }} · rappel programmé.</span></div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vQuiz }}">
+        <div style="padding:20px 20px 24px">
+          <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.585 0.145 45);margin-bottom:10px">VALIDATION DE THÈME</div>
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:28px;font-weight:400;line-height:1.12;margin-bottom:20px">Quiz — Modèle OSI et TCP/IP</div>
+          <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid oklch(0.885 0.012 78);margin-bottom:22px">
+            <span style="font-size:10px;letter-spacing:0.14em;color:oklch(0.50 0.012 60);white-space:nowrap">QUESTION {{ qNum }} / {{ qTotal }}</span>
+            <div style="flex:1"></div>
+            <div style="display:flex;gap:4px">
+              <sc-for list="{{ qTicks }}" as="t" hint-placeholder-count="5"><div style="{{ t.style }}"></div></sc-for>
+            </div>
+          </div>
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:23px;line-height:1.35;margin-bottom:22px;text-wrap:pretty">{{ qText }}</div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{ qOptions }}" as="o" hint-placeholder-count="4">
+              <button onClick="{{ o.action }}" style="{{ o.style }}">
+                <span style="{{ o.markStyle }}">{{ o.letter }}</span>
+                <span style="font-size:14px;line-height:1.45;text-align:left">{{ o.text }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vResultat }}">
+        <div style="padding:24px 20px 26px">
+          <div style="{{ resultBoxStyle }}">
+            <div style="font-size:9px;letter-spacing:0.18em;color:oklch(0.60 0.010 60);margin-bottom:10px">SCORE</div>
+            <div style="font-size:72px;font-weight:500;line-height:0.82;font-variant-numeric:tabular-nums;margin-bottom:12px">{{ scorePct }}<span style="font-size:26px">%</span></div>
+            <div style="font-size:12px;color:oklch(0.50 0.012 60);margin-bottom:22px">{{ scoreDetail }}</div>
+            <div style="height:1px;background:oklch(0.885 0.012 78);margin-bottom:22px"></div>
+            <div style="font-size:9px;letter-spacing:0.18em;color:oklch(0.60 0.010 60);margin-bottom:10px">RÉSULTAT</div>
+            <div style="font-family:'Newsreader',Georgia,serif;font-size:30px;line-height:1.12;margin-bottom:12px">{{ verdictTitle }}</div>
+            <div style="font-size:13px;color:oklch(0.50 0.012 60);line-height:1.7;text-wrap:pretty">{{ verdictText }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:20px">
+            <button onClick="{{ go.termine }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;background:oklch(0.235 0.014 60);color:oklch(0.963 0.008 85);font-size:12px;letter-spacing:0.14em;padding:18px 0" style-hover="background:oklch(0.585 0.145 45)">{{ verdictCta }}</button>
+            <button onClick="{{ restartTest }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;border:1px solid oklch(0.82 0.012 78);font-size:12px;letter-spacing:0.14em;padding:17px 0">REFAIRE LE QUIZ</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vTermine }}">
+        <div style="padding:24px 20px 26px">
+          <div style="border-top:2px solid oklch(0.585 0.145 45);padding-top:22px">
+            <div style="font-size:10px;letter-spacing:0.18em;color:oklch(0.585 0.145 45);margin-bottom:14px">THÈME TERMINÉ · 24 AOÛT</div>
+            <div style="font-family:'Newsreader',Georgia,serif;font-size:40px;font-weight:300;line-height:1.02;letter-spacing:-0.015em;margin-bottom:16px">Modèle OSI et TCP/IP, forgé.</div>
+            <div style="font-size:13px;color:oklch(0.50 0.012 60);line-height:1.7;margin-bottom:24px;text-wrap:pretty">Douze leçons, un placement et un quiz réussi à 83 %. Le foyer s'éteint : les cinq domaines sont de nouveau ouverts.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:oklch(0.885 0.012 78);border:1px solid oklch(0.885 0.012 78);margin-bottom:26px">
+              <sc-for list="{{ doneStats }}" as="k" hint-placeholder-count="4">
+                <div style="background:oklch(0.983 0.005 85);padding:16px 16px 18px">
+                  <div style="font-size:9px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:9px">{{ k.label }}</div>
+                  <div style="font-size:26px;font-weight:500;font-variant-numeric:tabular-nums">{{ k.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:10px;letter-spacing:0.18em;font-weight:600;margin-bottom:12px">ALLUMER LE PROCHAIN FOYER</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ nextChoices }}" as="c" hint-placeholder-count="4">
+                <button onClick="{{ go.domaines }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:14px;border:1px solid oklch(0.885 0.012 78);background:oklch(0.983 0.005 85);padding:16px 16px;min-height:56px" style-hover="border-color:oklch(0.585 0.145 45)">
+                  <span style="font-family:'Newsreader',Georgia,serif;font-size:19px">{{ c.name }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:10px;color:oklch(0.50 0.012 60);white-space:nowrap">{{ c.meta }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vBiblio }}">
+        <div style="padding:20px 20px 26px">
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:32px;font-weight:300;line-height:1.05;margin-bottom:8px">Bibliothèque</div>
+          <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;margin-bottom:22px;text-wrap:pretty">Les ouvrages importés par l'administrateur. Chaque leçon cite sa source.</div>
+          <sc-for list="{{ books }}" as="b" hint-placeholder-count="4">
+            <div style="display:flex;gap:14px;align-items:flex-start;padding:16px 0;border-top:1px solid oklch(0.885 0.012 78)">
+              <div style="width:32px;height:58px;background:oklch(0.90 0.012 78);border-left:3px solid oklch(0.585 0.145 45);flex:0 0 auto"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Newsreader',Georgia,serif;font-size:19px;font-style:italic;line-height:1.2;text-wrap:pretty">{{ b.title }}</div>
+                <div style="font-size:11px;color:oklch(0.50 0.012 60);margin-top:5px">{{ b.author }}</div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                  <span style="font-size:10px;color:oklch(0.60 0.010 60)">{{ b.domain }} · {{ b.lessons }}</span>
+                  <div style="flex:1"></div>
+                  <span style="{{ b.chipStyle }}">{{ b.state }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vHoraires }}">
+        <div style="padding:20px 20px 26px">
+          <div style="font-family:'Newsreader',Georgia,serif;font-size:32px;font-weight:300;line-height:1.05;margin-bottom:8px">Horaires</div>
+          <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;margin-bottom:22px;text-wrap:pretty">Le rythme conditionne les rappels et le découpage des leçons.</div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+            <button onClick="{{ pickDouble }}" style="{{ doubleStyle }}">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <div style="{{ doubleDot }}"></div>
+                <span style="font-size:10px;letter-spacing:0.16em">DEUX SESSIONS PAR JOUR</span>
+              </div>
+              <div style="font-family:'Newsreader',Georgia,serif;font-size:24px;margin-bottom:8px">Matin et soir</div>
+              <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;text-wrap:pretty">2 × 30 min. La session du matin manquée est rattrapable le soir avant minuit.</div>
+            </button>
+            <button onClick="{{ pickSingle }}" style="{{ singleStyle }}">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <div style="{{ singleDot }}"></div>
+                <span style="font-size:10px;letter-spacing:0.16em">SESSION UNIQUE</span>
+              </div>
+              <div style="font-family:'Newsreader',Georgia,serif;font-size:24px;margin-bottom:8px">Une fois par jour</div>
+              <div style="font-size:12px;color:oklch(0.50 0.012 60);line-height:1.65;text-wrap:pretty">1 × 30 min. Pas de rattrapage : la série se rompt si la journée est vide.</div>
+            </button>
+          </div>
+
+          <div style="border:1px solid oklch(0.885 0.012 78);background:oklch(0.983 0.005 85);padding:20px 18px;margin-bottom:20px">
+            <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.60 0.010 60);margin-bottom:18px">RÉGLAGE DES HEURES</div>
+            <div style="display:flex;gap:28px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:11px;color:oklch(0.50 0.012 60);margin-bottom:7px">{{ slot1Label }}</div>
+                <input type="time" value="{{ t1 }}" onChange="{{ setT1 }}" style="all:unset;box-sizing:border-box;font-size:28px;font-weight:500;font-variant-numeric:tabular-nums;border-bottom:1px solid oklch(0.235 0.014 60);padding-bottom:4px;cursor:text" />
+              </div>
+              <sc-if value="{{ isDouble }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div style="font-size:11px;color:oklch(0.50 0.012 60);margin-bottom:7px">Session du soir</div>
+                <input type="time" value="{{ t2 }}" onChange="{{ setT2 }}" style="all:unset;box-sizing:border-box;font-size:28px;font-weight:500;font-variant-numeric:tabular-nums;border-bottom:1px solid oklch(0.235 0.014 60);padding-bottom:4px;cursor:text" />
+              </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ isDouble }}">
+            <div style="display:flex;align-items:center;gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid oklch(0.910 0.010 78)">
+              <span style="font-size:12px;color:oklch(0.50 0.012 60)">Rattrapage du soir</span>
+              <div style="flex:1"></div>
+              <button onClick="{{ toggleCatch }}" style="{{ catchStyle }}">{{ catchLabel }}</button>
+            </div>
+            </sc-if>
+          </div>
+
+          <button onClick="{{ savePlan }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;background:oklch(0.235 0.014 60);color:oklch(0.963 0.008 85);font-size:12px;letter-spacing:0.16em;padding:18px 0" style-hover="background:oklch(0.585 0.145 45)">ENREGISTRER</button>
+          <sc-if value="{{ planSaved }}">
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-top:14px">
+            <div style="width:8px;height:8px;background:oklch(0.585 0.11 168);margin-top:5px;flex:0 0 auto"></div>
+            <span style="font-size:11px;color:oklch(0.50 0.012 60);line-height:1.6">{{ savedMsg }}</span>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ vAdmin }}">
+        <div style="padding:20px 20px 26px;color:oklch(0.92 0.008 85)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+            <div style="width:10px;height:10px;background:oklch(0.585 0.145 45)"></div>
+            <span style="font-size:11px;letter-spacing:0.20em;font-weight:600">SYNTHÈSE</span>
+            <div style="flex:1"></div>
+            <span style="font-size:9px;letter-spacing:0.14em;color:oklch(0.58 0.008 65)">SEM. 34 · 2026</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:oklch(0.32 0.008 65);border:1px solid oklch(0.32 0.008 65);margin-bottom:24px">
+            <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:oklch(0.225 0.007 65);padding:15px 15px 17px">
+                <div style="font-size:9px;letter-spacing:0.14em;color:oklch(0.58 0.008 65);margin-bottom:11px">{{ k.label }}</div>
+                <div style="font-size:26px;font-weight:500;line-height:0.9;font-variant-numeric:tabular-nums">{{ k.value }}</div>
+                <div style="font-size:10px;color:oklch(0.70 0.008 85);margin-top:9px;line-height:1.5">{{ k.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.58 0.008 65);margin-bottom:10px">ACTIVITÉ RÉCENTE</div>
+          <div style="border:1px solid oklch(0.32 0.008 65);margin-bottom:24px">
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5">
+              <div style="{{ a.rowStyle }}">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                  <span style="{{ a.tagStyle }}">{{ a.tag }}</span>
+                  <span style="font-size:10px;color:oklch(0.58 0.008 65);font-variant-numeric:tabular-nums">{{ a.time }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:10px;color:oklch(0.70 0.008 85);font-variant-numeric:tabular-nums">{{ a.val }}</span>
+                </div>
+                <div style="font-size:12px;color:oklch(0.88 0.008 85);line-height:1.5">{{ a.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:10px;letter-spacing:0.16em;color:oklch(0.58 0.008 65);margin-bottom:10px">IMPORT DE CONTENU</div>
+          <button onClick="{{ runImport }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;border:1px dashed oklch(0.42 0.008 65);background:oklch(0.205 0.007 65);padding:28px 20px;text-align:center;margin-bottom:12px" style-hover="border-color:oklch(0.585 0.145 45)">
+            <div style="width:15px;height:15px;border:2px solid oklch(0.585 0.145 45);margin:0 auto 13px"></div>
+            <div style="font-size:13px;margin-bottom:6px">Déposer un livre de référence</div>
+            <div style="font-size:11px;color:oklch(0.58 0.008 65);line-height:1.5">PDF ou texte · 40 Mo max</div>
+          </button>
+          <div style="border:1px solid oklch(0.32 0.008 65);background:oklch(0.205 0.007 65)">
+            <div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid oklch(0.32 0.008 65)">
+              <div style="{{ importDotStyle }}"></div>
+              <span style="font-size:10px;letter-spacing:0.14em">{{ importStatus }}</span>
+            </div>
+            <div style="padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ importLog }}" as="l" hint-placeholder-count="4">
+                <div style="display:flex;gap:10px;align-items:baseline">
+                  <span style="font-size:9px;color:oklch(0.50 0.008 65);font-variant-numeric:tabular-nums;flex:0 0 auto">{{ l.t }}</span>
+                  <span style="{{ l.style }}">{{ l.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+      </div>
+
+      <sc-if value="{{ showLeconBar }}">
+      <div style="flex:0 0 auto;border-top:1px solid oklch(0.885 0.012 78);background:oklch(0.983 0.005 85);padding:12px 16px 14px;display:flex;align-items:center;gap:12px">
+        <sc-if value="{{ notValidated }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ validate }}" style="all:unset;box-sizing:border-box;cursor:pointer;flex:1;text-align:center;background:oklch(0.235 0.014 60);color:oklch(0.963 0.008 85);font-size:12px;letter-spacing:0.14em;padding:18px 0" style-hover="background:oklch(0.585 0.145 45)">VALIDER · +40 PTS</button>
+        </sc-if>
+        <sc-if value="{{ validated }}">
+        <button onClick="{{ go.quiz }}" style="all:unset;box-sizing:border-box;cursor:pointer;flex:1;text-align:center;border:1px solid oklch(0.235 0.014 60);font-size:12px;letter-spacing:0.14em;padding:17px 0">PASSER AU QUIZ →</button>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ vQuiz }}">
+      <div style="flex:0 0 auto;border-top:1px solid oklch(0.885 0.012 78);background:oklch(0.983 0.005 85);padding:12px 16px 14px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:11px;color:oklch(0.60 0.010 60);flex:0 1 auto">{{ qHint }}</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ nextQ }}" style="{{ nextStyle }}">{{ nextLabel }}</button>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ showTabs }}">
+      <div style="flex:0 0 auto;border-top:1px solid oklch(0.885 0.012 78);background:oklch(0.951 0.008 85);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:16px">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.action }}" style="{{ t.style }}">
+            <span style="{{ t.mark }}"></span>
+            <span style="{{ t.text }}">{{ t.label }}</span>
+          </button>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ vAdmin }}">
+      <div style="flex:0 0 auto;border-top:1px solid oklch(0.32 0.008 65);background:oklch(0.205 0.007 65);padding:14px 16px 24px">
+        <button onClick="{{ go.accueil }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;text-align:center;border:1px solid oklch(0.40 0.008 65);color:oklch(0.585 0.145 45);font-size:11px;letter-spacing:0.14em;padding:16px 0" style-hover="border-color:oklch(0.585 0.145 45)">← ESPACE APPRENANT</button>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;learnerName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Marc Delaunay&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Contenu&quot;}}">
+const EMBER = 'oklch(0.585 0.145 45)';
+const VERD = 'oklch(0.585 0.11 168)';
+const INK = 'oklch(0.235 0.014 60)';
+const INK2 = 'oklch(0.50 0.012 60)';
+const INK3 = 'oklch(0.62 0.010 60)';
+const RULE = 'oklch(0.885 0.012 78)';
+const PAPER = 'oklch(0.963 0.008 85)';
+const PAPER2 = 'oklch(0.983 0.005 85)';
+const DARK = 'oklch(0.185 0.006 65)';
+
+const QUESTIONS = [
+  { q: "Dans le modèle OSI, à quelle couche l'adresse MAC est-elle utilisée ?",
+    opts: ["Couche 1 — physique", "Couche 2 — liaison de données", "Couche 3 — réseau", "Couche 4 — transport"], correct: 1 },
+  { q: "Quel protocole garantit la remise ordonnée des segments ?", opts: ["UDP", "ICMP", "TCP", "ARP"], correct: 2 },
+  { q: "Que fait un routeur qu'un commutateur ne fait pas ?",
+    opts: ["Il isole les domaines de collision", "Il achemine entre réseaux logiques distincts", "Il apprend les adresses MAC", "Il duplique les trames"], correct: 1 },
+  { q: "Le masque /26 découpe un /24 en combien de sous-réseaux ?", opts: ["2", "4", "8", "16"], correct: 1 },
+  { q: "Quelle unité de données circule au niveau de la couche transport ?",
+    opts: ["La trame", "Le paquet", "Le segment", "Le bit"], correct: 2 }
+];
+
+const SCREENS = {
+  accueil:  ['01', 'Accueil — foyer allumé, série, capital', 'Accueil'],
+  domaines: ['02', 'Les cinq domaines — un seul allumé', 'Domaines'],
+  verrou:   ['03', 'Feuille — domaine verrouillé', 'Domaine verrouillé'],
+  lecon:    ['04', 'Leçon du jour — lecture + validation', 'Leçon du jour'],
+  quiz:     ['05', 'Quiz de validation — question', 'Quiz'],
+  resultat: ['06', 'Quiz — résultat et verdict', 'Résultat du quiz'],
+  termine:  ['07', 'Thème terminé — prochain foyer', 'Thème terminé'],
+  biblio:   ['08', 'Bibliothèque — sources indexées', 'Bibliothèque'],
+  horaires: ['09', 'Horaires — rythme et rappels', 'Horaires'],
+  admin:    ['10', 'Admin mobile — synthèse et import', 'Synthèse + import']
+};
+
+class Component extends DCLogic {
+  state = {
+    view: 'accueil', validated: false, qi: 0, answers: [],
+    mode: 'double', t1: '07:15', t2: '20:30', catchUp: true, planSaved: false, imported: false
+  };
+
+  set(v) { return () => this.setState({ view: v }); }
+
+  renderVals() {
+    const s = this.state, v = s.view;
+    const name = this.props.learnerName ?? 'Marc Delaunay';
+    const first = name.split(' ')[0];
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const points = 2480 + (s.validated ? 40 : 0);
+    const streak = 17 + (s.validated ? 1 : 0);
+    const dark = v === 'admin';
+
+    const go = {
+      accueil: this.set('accueil'), domaines: this.set('domaines'), verrou: this.set('verrou'),
+      lecon: this.set('lecon'), biblio: this.set('biblio'), horaires: this.set('horaires'),
+      termine: this.set('termine'), admin: this.set('admin'),
+      quiz: () => this.setState({ view: 'quiz', qi: 0, answers: [] })
+    };
+
+    const navItem = (key, on) => ({
+      label: SCREENS[key][0] + ' · ' + SCREENS[key][2],
+      action: go[key],
+      style: { all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', background: on ? PAPER2 : 'transparent' },
+      dot: { width: '3px', height: '13px', background: on ? EMBER : 'transparent', flex: '0 0 auto' },
+      text: { fontSize: '11px', letterSpacing: '0.04em', color: on ? INK : INK2, fontWeight: on ? 600 : 400 }
+    });
+    const learnerKeys = ['accueil', 'domaines', 'verrou', 'lecon', 'quiz', 'resultat', 'termine', 'biblio', 'horaires'];
+    const navLearner = learnerKeys.map(k => {
+      const item = navItem(k === 'resultat' ? 'quiz' : k, v === k);
+      item.label = SCREENS[k][0] + ' · ' + SCREENS[k][2];
+      item.action = k === 'resultat' ? () => this.setState({ view: 'resultat', qi: 5, answers: [1, 2, 1, 1, 2] }) : (go[k] || this.set(k));
+      return item;
+    });
+    const navAdmin = [navItem('admin', v === 'admin')];
+
+    const tabDefs = [
+      { k: 'accueil', label: 'Accueil', on: v === 'accueil' || v === 'domaines' || v === 'verrou' },
+      { k: 'lecon', label: 'Atelier', on: v === 'lecon' || v === 'quiz' || v === 'resultat' || v === 'termine' },
+      { k: 'biblio', label: 'Livres', on: v === 'biblio' },
+      { k: 'horaires', label: 'Horaires', on: v === 'horaires' }
+    ];
+    const tabs = tabDefs.map(t => ({
+      label: t.label, action: go[t.k],
+      style: { all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '7px', paddingTop: '11px', paddingBottom: '9px', minHeight: '56px' },
+      mark: { width: '9px', height: '9px', background: t.on ? EMBER : 'transparent', border: '1px solid ' + (t.on ? EMBER : 'oklch(0.74 0.012 78)') },
+      text: { fontSize: '10px', letterSpacing: '0.10em', color: t.on ? INK : INK2, fontWeight: t.on ? 600 : 400 }
+    }));
+
+    const weekMarks = [1, 1, 1, 1, 1, 0, 0].map(on => ({ style: { width: '4px', height: (on ? 15 : 7) + 'px', background: on ? EMBER : 'oklch(0.82 0.012 78)' } }));
+    const lessonTicks = Array.from({ length: 12 }, (_, i) => ({
+      style: { flex: '1', height: '20px', background: i < 6 ? INK : 'transparent', border: '1px solid ' + (i < 6 ? INK : 'oklch(0.82 0.012 78)') }
+    }));
+
+    const chip = (label) => {
+      const map = {
+        'EN COURS': { color: PAPER2, background: EMBER, border: '1px solid ' + EMBER },
+        'VERROUILLÉ': { color: INK3, background: 'transparent', border: '1px dashed oklch(0.78 0.012 78)' }
+      };
+      return Object.assign({ fontSize: '9px', letterSpacing: '0.12em', padding: '5px 8px', whiteSpace: 'nowrap', flex: '0 0 auto' }, map[label]);
+    };
+
+    const raw = [
+      { name: 'Réseau', desc: "Modèles en couches, protocoles, routage et diagnostic.", level: 2 },
+      { name: 'Sécurité', desc: "Menaces, cryptographie, durcissement et réponse à incident.", level: 1 },
+      { name: 'Génie logiciel', desc: "Architecture, tests, revue de code et dette technique.", level: 0 },
+      { name: 'Développement', desc: "Langages, structures de données, algorithmes et outillage.", level: 3 },
+      { name: 'Informatique générale', desc: "Systèmes, matériel, culture et histoire du calcul.", level: 0 }
+    ];
+    const mk = (d, i, wide) => {
+      const st = i === 0 ? 'EN COURS' : 'VERROUILLÉ';
+      const locked = st === 'VERROUILLÉ';
+      return {
+        num: String(i + 1).padStart(2, '0'), name: d.name, desc: d.desc, state: st,
+        levelLabel: d.level ? 'NIVEAU ' + d.level + ' / 5' : 'NON ÉVALUÉ',
+        segs: Array.from({ length: 5 }, (_, k) => ({ style: { width: wide ? '20px' : '11px', height: '5px', background: k < d.level ? (locked ? INK : EMBER) : 'oklch(0.87 0.012 78)' } })),
+        chipStyle: chip(st),
+        cta: locked ? 'POURQUOI ?' : 'CONTINUER →',
+        ctaStyle: { fontSize: '10px', letterSpacing: '0.12em', color: locked ? INK2 : EMBER, fontWeight: 600, whiteSpace: 'nowrap' },
+        action: locked ? go.verrou : go.lecon,
+        rowStyle: { all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '15px 0', borderBottom: '1px solid ' + RULE, opacity: locked ? 0.62 : 1, minHeight: '56px' },
+        nameStyle: { fontFamily: "'Newsreader',Georgia,serif", fontSize: '17px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+        cardStyle: { all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'block', width: '100%', padding: '18px 16px 18px', marginBottom: '10px', border: '1px solid ' + (locked ? RULE : INK), background: locked ? 'transparent' : PAPER2, opacity: locked ? 0.75 : 1 }
+      };
+    };
+    const domainsShort = raw.map((d, i) => mk(d, i, false));
+    const domainsFull = raw.map((d, i) => mk(d, i, true));
+
+    const concepts = [
+      { n: '01', term: 'PDU — protocol data unit', def: "Nom de l'unité de données à chaque couche : segment, paquet, trame." },
+      { n: '02', term: 'En-tête (header)', def: "Métadonnées ajoutées par une couche, lues par la couche homologue à l'autre bout." },
+      { n: '03', term: 'Surcoût (overhead)', def: "Part de la bande passante consommée par les en-têtes." },
+      { n: '04', term: 'Isolation des couches', def: "Une couche ignore ce qu'elle transporte — d'où le diagnostic étage par étage." }
+    ];
+
+    const total = QUESTIONS.length;
+    const qi = Math.min(s.qi, total - 1);
+    const finished = s.qi >= total;
+    const answered = s.answers[qi] != null;
+    const correct = s.answers.reduce((a, x, i) => a + (x === QUESTIONS[i].correct ? 1 : 0), 0);
+    const scorePct = Math.round((correct / total) * 100);
+    const passed = scorePct >= 70;
+
+    const qOptions = QUESTIONS[qi].opts.map((t, i) => {
+      const sel = s.answers[qi] === i;
+      return {
+        text: t, letter: 'ABCD'[i],
+        action: () => this.setState(st => { const a = st.answers.slice(); a[qi] = i; return { answers: a }; }),
+        style: { all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', gap: '13px', alignItems: 'center', padding: '15px 14px', minHeight: '56px', border: '1px solid ' + (sel ? INK : RULE), background: sel ? 'oklch(0.975 0.010 70)' : 'transparent' },
+        markStyle: { width: '26px', height: '26px', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', border: '1px solid ' + (sel ? EMBER : 'oklch(0.82 0.012 78)'), background: sel ? EMBER : 'transparent', color: sel ? PAPER2 : INK2 }
+      };
+    });
+    const qTicks = Array.from({ length: total }, (_, i) => ({
+      style: { width: '16px', height: '4px', background: i < qi ? INK : (i === qi ? EMBER : 'oklch(0.86 0.012 78)') }
+    }));
+
+    const books = [
+      ['Réseaux', 'Andrew S. Tanenbaum', 'Réseau', '48 leçons', 'INDEXÉ'],
+      ['The Pragmatic Programmer', 'Hunt & Thomas', 'Génie logiciel', '36 leçons', 'INDEXÉ'],
+      ['Applied Cryptography', 'Bruce Schneier', 'Sécurité', '52 leçons', 'INDEXÉ'],
+      ['Structure and Interpretation…', 'Abelson & Sussman', 'Développement', '—', 'EN COURS']
+    ].map(b => ({
+      title: b[0], author: b[1], domain: b[2], lessons: b[3], state: b[4],
+      chipStyle: { fontSize: '9px', letterSpacing: '0.12em', padding: '4px 8px', whiteSpace: 'nowrap', border: '1px solid ' + (b[4] === 'INDEXÉ' ? 'oklch(0.82 0.012 78)' : EMBER), color: b[4] === 'INDEXÉ' ? INK2 : EMBER }
+    }));
+
+    const isDouble = s.mode === 'double';
+    const planCard = (on) => ({ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'block', width: '100%', padding: '18px 16px', border: '1px solid ' + (on ? INK : RULE), background: on ? PAPER2 : 'transparent' });
+    const planDot = (on) => ({ width: '12px', height: '12px', flex: '0 0 auto', border: '1px solid ' + (on ? EMBER : 'oklch(0.78 0.012 78)'), background: on ? EMBER : 'transparent' });
+
+    const kpis = [
+      { label: 'DOMAINES', value: '5', sub: '1 allumé · 4 verrouillés' },
+      { label: 'THÈMES', value: '23', sub: '4 sans leçon' },
+      { label: 'LEÇONS', value: '214', sub: '187 issues d\u2019un livre' },
+      { label: 'CAPITAL', value: this.fmt(points), sub: 'série de ' + streak + ' jours' }
+    ];
+    const activity = [
+      ['09:12', 'SESSION', 'Leçon 6 — Encapsulation et désencapsulation', '+40'],
+      ['Hier 20:34', 'SESSION', 'Leçon 5 — Couches et responsabilités', '+40'],
+      ['21 août', 'IMPORT', 'Réseaux — Tanenbaum · 48 leçons générées', 'PDF'],
+      ['20 août', 'QUIZ', 'Fondamentaux du réseau — validé', '83 %'],
+      ['18 août', 'PLACEMENT', 'Réseau — niveau 2 assigné', '68 %']
+    ].map((a, i) => ({
+      time: a[0], tag: a[1], text: a[2], val: a[3],
+      rowStyle: { padding: '13px 14px', borderBottom: i < 4 ? '1px solid oklch(0.28 0.007 65)' : 'none' },
+      tagStyle: { fontSize: '9px', letterSpacing: '0.10em', padding: '3px 7px', flex: '0 0 auto', border: '1px solid ' + (a[1] === 'SESSION' ? 'oklch(0.40 0.008 65)' : EMBER), color: a[1] === 'SESSION' ? 'oklch(0.70 0.008 85)' : EMBER }
+    }));
+    const importLog = (s.imported ? [
+      ['00:00', 'Fichier reçu — reseaux-tanenbaum.pdf (28,4 Mo)', 0],
+      ['00:11', 'Découpage en unités de 30 min — 48 séances', 0],
+      ['01:02', 'Citations de la source attachées', 0],
+      ['01:04', '48 leçons rattachées à Réseau / Modèle OSI', 1]
+    ] : [
+      ['—', 'Aucun import en cours.', 2],
+      ['—', 'Déposez un PDF pour générer des leçons.', 2],
+      ['—', "Chaque leçon citera le chapitre et la page.", 2]
+    ]).map(l => ({ t: l[0], text: l[1], style: { fontSize: '11px', lineHeight: 1.6, color: l[2] === 1 ? VERD : l[2] === 2 ? 'oklch(0.58 0.008 65)' : 'oklch(0.88 0.008 85)' } }));
+
+    const meta = SCREENS[v] || SCREENS.accueil;
+
+    return {
+      navLearner, navAdmin, tabs, go,
+      screenCode: 'ÉCRAN ' + meta[0], screenNote: meta[1],
+      shellBg: dark ? DARK : PAPER,
+      statusStyle: {
+        flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', height: '52px', padding: '10px 26px 0',
+        fontSize: '11px', fontWeight: 500,
+        color: dark ? 'oklch(0.92 0.008 85)' : INK,
+        background: dark ? DARK : PAPER,
+        borderBottom: '1px solid ' + (dark ? 'oklch(0.32 0.008 65)' : RULE)
+      },
+      bodyStyle: { flex: '1', minHeight: 0, overflowY: 'auto', background: dark ? DARK : PAPER },
+      vAccueil: v === 'accueil', vDomaines: v === 'domaines', vVerrou: v === 'verrou', vLecon: v === 'lecon',
+      vQuiz: v === 'quiz', vResultat: v === 'resultat', vTermine: v === 'termine',
+      vBiblio: v === 'biblio', vHoraires: v === 'horaires', vAdmin: v === 'admin',
+      showTabs: !dark && v !== 'verrou' && v !== 'quiz',
+      showLeconBar: v === 'lecon',
+      firstName: first, initials, streak, pointsFmt: this.fmt(points), sessionsDone: 86 + (s.validated ? 1 : 0),
+      weekMarks, lessonTicks, domainsShort, domainsFull, concepts,
+      validated: s.validated, notValidated: !s.validated,
+      validate: () => this.setState({ validated: true }),
+      qNum: qi + 1, qTotal: total, qText: QUESTIONS[qi].q, qOptions, qTicks,
+      qHint: answered ? 'Réponse enregistrée' : 'Sélectionnez une réponse',
+      nextLabel: qi === total - 1 ? 'TERMINER' : 'SUIVANTE →',
+      nextStyle: {
+        all: 'unset', boxSizing: 'border-box', cursor: answered ? 'pointer' : 'not-allowed', fontSize: '11px', letterSpacing: '0.14em',
+        padding: '16px 22px', flex: '0 0 auto', background: answered ? INK : 'transparent',
+        color: answered ? PAPER2 : INK3, border: '1px solid ' + (answered ? INK : 'oklch(0.85 0.012 78)')
+      },
+      nextQ: () => {
+        if (this.state.answers[Math.min(this.state.qi, total - 1)] == null) return;
+        this.setState(st => (st.qi >= total - 1 ? { view: 'resultat', qi: total } : { qi: st.qi + 1 }));
+      },
+      restartTest: () => this.setState({ view: 'quiz', qi: 0, answers: [] }),
+      scorePct, scoreDetail: correct + ' bonnes réponses sur ' + total,
+      resultBoxStyle: { border: '1px solid ' + (passed ? VERD : 'oklch(0.62 0.13 30)'), background: PAPER2, padding: '26px 20px 28px' },
+      verdictTitle: passed ? 'Thème validé' : 'Seuil non atteint',
+      verdictText: passed
+        ? "Le foyer s'éteint : les cinq domaines redeviennent disponibles et vous pouvez en allumer un nouveau."
+        : "Il faut 70 % pour valider. Les leçons restent accessibles ; repassez le quiz quand vous voulez.",
+      verdictCta: passed ? 'VOIR LE BILAN DU THÈME' : 'RÉVISER LE THÈME',
+      doneStats: [
+        { label: 'LEÇONS', value: '12' }, { label: 'POINTS', value: '640' },
+        { label: 'QUIZ', value: '83 %' }, { label: 'NIVEAU', value: '2 → 3' }
+      ],
+      nextChoices: [
+        { name: 'Sécurité', meta: '5 sujets · niv. 1' },
+        { name: 'Génie logiciel', meta: '6 sujets · non évalué' },
+        { name: 'Développement', meta: '7 sujets · niv. 3' },
+        { name: 'Informatique générale', meta: '3 sujets · non évalué' }
+      ],
+      books,
+      isDouble, doubleStyle: planCard(isDouble), singleStyle: planCard(!isDouble),
+      doubleDot: planDot(isDouble), singleDot: planDot(!isDouble),
+      pickDouble: () => this.setState({ mode: 'double', planSaved: false }),
+      pickSingle: () => this.setState({ mode: 'single', planSaved: false }),
+      slot1Label: isDouble ? 'Session du matin' : 'Session quotidienne',
+      t1: s.t1, t2: s.t2,
+      setT1: (e) => this.setState({ t1: e.target.value, planSaved: false }),
+      setT2: (e) => this.setState({ t2: e.target.value, planSaved: false }),
+      toggleCatch: () => this.setState(st => ({ catchUp: !st.catchUp, planSaved: false })),
+      catchLabel: s.catchUp ? 'ACTIVÉ' : 'DÉSACTIVÉ',
+      catchStyle: {
+        all: 'unset', boxSizing: 'border-box', cursor: 'pointer', fontSize: '11px', letterSpacing: '0.14em', padding: '13px 18px',
+        border: '1px solid ' + (s.catchUp ? INK : 'oklch(0.82 0.012 78)'),
+        background: s.catchUp ? INK : 'transparent', color: s.catchUp ? PAPER2 : INK2
+      },
+      savePlan: () => this.setState({ planSaved: true }),
+      planSaved: s.planSaved,
+      savedMsg: 'Horaires enregistrés · rappels reprogrammés à ' + (isDouble ? s.t1 + ' et ' + s.t2 : s.t1),
+      kpis, activity, importLog,
+      runImport: () => this.setState({ imported: true }),
+      importStatus: s.imported ? 'GÉNÉRATION TERMINÉE' : 'EN ATTENTE DE FICHIER',
+      importDotStyle: { width: '8px', height: '8px', flex: '0 0 auto', background: s.imported ? VERD : 'oklch(0.45 0.008 65)' }
+    };
+  }
+
+  fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+}
+
+</script>
+</body>
+</html>

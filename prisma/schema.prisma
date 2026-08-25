@@ -1,0 +1,251 @@
+// Prisma Schema for SkillForge (SQLite Local Database)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./skillforge.db"
+}
+
+model UserProfile {
+  id                      String                  @id @default(uuid())
+  name                    String                  @default("Apprenant")
+  sessionMode             String                  @default("TWO_SESSIONS") // "TWO_SESSIONS" | "ONE_SESSION"
+  morningTime             String                  @default("07:30")
+  eveningTime             String                  @default("20:00")
+  singleSessionTime       String                  @default("19:00")
+  currentActiveDomainId   String?
+  currentActiveTopicId    String?                 // Lock: Only 1 active topic/domain allowed until completed
+  totalXp                 Int                     @default(0)
+  currentStreak           Int                     @default(0)
+  lastSessionDate         String?                 // YYYY-MM-DD
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  progresses              UserProgress[]
+  sessions                UserSession[]
+  quizAttempts            QuizAttempt[]
+  placementResults        PlacementResult[]
+  notificationSettings    NotificationSettings?
+}
+
+model Domain {
+  id               String            @id @default(uuid())
+  name             String
+  slug             String            @unique
+  description      String
+  icon             String            @default("BookOpen")
+  color            String            @default("#3b82f6")
+  order            Int               @default(1)
+  isActive         Boolean           @default(true)
+
+  topics           Topic[]
+  placementTests   PlacementTest[]
+  placementResults PlacementResult[]
+  knowledgeUpdates KnowledgeUpdate[]
+}
+
+model Topic {
+  id                 String         @id @default(uuid())
+  domainId           String
+  domain             Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name               String
+  slug               String         @unique
+  description        String
+  maxDifficultyLevel Int            @default(5) // 1: Débutant -> 5: Spécialiste
+  estimatedWeeks     Int            @default(1)
+  prerequisites      String         @default("[]") // JSON string of topic slugs
+
+  lessons            Lesson[]
+  quizzes            Quiz[]
+  resources          Resource[]
+  userProgresses     UserProgress[]
+}
+
+model BookReference {
+  id           String   @id @default(uuid())
+  title        String
+  author       String
+  isbn         String?
+  purchaseUrl  String?
+  description  String
+  pdfPath      String?  // Optional local path if user bound a local PDF
+  addedAt      DateTime @default(now())
+
+  lessons      Lesson[]
+}
+
+model Lesson {
+  id              String         @id @default(uuid())
+  topicId         String
+  topic           Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title           String
+  contentMd       String         // Content in French with English technical terms in parentheses
+  dayNumber       Int            // 1 to 7
+  sessionType     String         // "MORNING" | "EVENING" | "FULL_DAY"
+  difficultyLevel Int            @default(1) // 1 to 5
+  durationMinutes Int            @default(30)
+  keyConcepts     String         @default("[]") // JSON string of array
+  contentSource   String         @default("hybrid") // "manual" | "ai" | "hybrid"
+  
+  bookReferenceId String?
+  bookReference   BookReference? @relation(fields: [bookReferenceId], references: [id], onDelete: SetNull)
+  chapterCitation String?        // e.g. "Chapitre 4, pp. 112-145"
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  userSessions    UserSession[]
+}
+
+model Quiz {
+  id              String         @id @default(uuid())
+  topicId         String
+  topic           Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title           String
+  difficultyLevel Int            @default(1)
+  passingScore    Int            @default(80) // Percentage
+  quizType        String         @default("WEEKLY") // "WEEKLY" | "PLACEMENT"
+
+  questions       QuizQuestion[]
+  quizAttempts    QuizAttempt[]
+}
+
+model QuizQuestion {
+  id            String   @id @default(uuid())
+  quizId        String?
+  quiz          Quiz?    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  placementTestId String?
+  placementTest PlacementTest? @relation(fields: [placementTestId], references: [id], onDelete: Cascade)
+  questionText  String
+  options       String   // JSON string of options array e.g. ["A", "B", "C", "D"]
+  correctAnswer String
+  explanation   String
+  points        Int      @default(10)
+  questionType  String   @default("MCQ") // "MCQ" | "TRUE_FALSE" | "CODE" | "OPEN"
+}
+
+model QuizAttempt {
+  id          String      @id @default(uuid())
+  userId      String
+  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId      String
+  quiz        Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  score       Int
+  maxScore    Int
+  percentage  Float
+  passed      Boolean
+  answers     String      // JSON string of user answers
+  attemptedAt DateTime    @default(now())
+}
+
+model PlacementTest {
+  id              String            @id @default(uuid())
+  domainId        String
+  domain          Domain            @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  title           String
+  description     String
+  questionCount   Int               @default(15)
+  levelThresholds String            @default("{\"1\":0,\"2\":40,\"3\":60,\"4\":80,\"5\":90}") // JSON string
+
+  questions       QuizQuestion[]
+  results         PlacementResult[]
+}
+
+model PlacementResult {
+  id              String        @id @default(uuid())
+  userId          String
+  user            UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domainId        String
+  domain          Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  placementTestId String
+  placementTest   PlacementTest @relation(fields: [placementTestId], references: [id], onDelete: Cascade)
+  score           Int
+  assignedLevel   Int           // 1 to 5
+  takenAt         DateTime      @default(now())
+}
+
+model UserProgress {
+  id              String      @id @default(uuid())
+  userId          String
+  user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId         String
+  topic           Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  currentWeek     Int         @default(1)
+  currentDay      Int         @default(1)
+  difficultyLevel Int         @default(1)
+  status          String      @default("IN_PROGRESS") // "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "MASTERED"
+  completionPct   Float       @default(0.0)
+  startedAt       DateTime    @default(now())
+  completedAt     DateTime?
+
+  @@unique([userId, topicId])
+}
+
+model UserSession {
+  id              String      @id @default(uuid())
+  userId          String
+  user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId        String
+  lesson          Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  sessionType     String      // "MORNING" | "EVENING" | "ACCUMULATED"
+  scheduledAt     DateTime
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationSeconds Int         @default(0)
+  completed       Boolean     @default(false)
+  wasAccumulated  Boolean     @default(false)
+  notes           String?
+}
+
+model Resource {
+  id              String   @id @default(uuid())
+  topicId         String?
+  topic           Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  title           String
+  type            String   // "PDF" | "URL" | "ARTICLE"
+  localPath       String?
+  url             String?
+  description     String?
+  author          String?
+  difficultyLevel Int      @default(1)
+  tags            String   @default("[]") // JSON string
+  addedAt         DateTime @default(now())
+}
+
+model NotificationSettings {
+  id                   String      @id @default(uuid())
+  userId               String      @unique
+  user                 UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  desktopEnabled       Boolean     @default(true)
+  soundEnabled         Boolean     @default(true)
+  morningReminderMins  Int         @default(5)
+  eveningReminderMins  Int         @default(5)
+  accumulationReminder Boolean     @default(true)
+  streakReminder       Boolean     @default(true)
+}
+
+model KnowledgeUpdate {
+  id         String   @id @default(uuid())
+  domainId   String
+  domain     Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  updatedAt  DateTime @default(now())
+  updateType String   @default("MONTHLY") // "MONTHLY" | "MANUAL" | "AI"
+  changelog  String
+}
+
+model IngestJob {
+  id               String   @id @default(uuid())
+  status           String   @default("PENDING") // "PENDING" | "RUNNING" | "DONE" | "ERROR"
+  bookTitle        String
+  topicName        String   @default("")
+  totalChunks      Int      @default(0)
+  processedChunks  Int      @default(0)
+  lessonsCreated   Int      @default(0)
+  questionsCreated Int      @default(0)
+  message          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
