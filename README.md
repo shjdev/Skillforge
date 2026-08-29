@@ -1,47 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SkillForge
 
-## Getting Started
+Application d'apprentissage quotidien structuré — leçons, quiz de validation, révision espacée et suivi de progression — construite avec Next.js 16, Prisma/SQLite et Zustand. L'interface s'adapte automatiquement (responsive) entre une mise en page desktop et une mise en page mobile dédiée selon la largeur d'écran.
 
-First, run the development server:
+## Démarrage
 
 ```bash
+npm install
+cp .env.example .env      # optionnel — voir .env.example pour GEMINI_API_KEY
+npm run db:push           # crée la base SQLite locale (prisma/skillforge.db)
+npm run db:seed           # données de démonstration (domaines, thèmes, leçons)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrez [http://localhost:3000](http://localhost:3000). Réduisez la fenêtre du navigateur (ou ouvrez depuis un téléphone) pour voir la mise en page mobile — le contenu bascule en direct selon la largeur d'écran, sans redirection ni bouton.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+L'espace admin est accessible depuis la barre latérale (« ATELIER → ADMIN ») ou directement sur `/admin/dashboard`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Desktop shell (real OS notifications)
-
-The app can also run inside a thin Electron shell so session reminders fire as real desktop notifications instead of browser notifications. It's a dev-mode wrapper only — no installer/packaging is set up.
+## Tests
 
 ```bash
-npm run dev        # terminal 1 — start the Next.js server
-npm run electron    # terminal 2 — open it in a desktop window
+npm run test         # suite complète (vitest)
+npm run test:watch   # mode watch
 ```
 
-`electron/main.js` loads `http://localhost:3000` (retrying until the dev server is up). The main process itself polls `/api/profile` every 20s and fires native OS notifications when a session slot is due (`electron/scheduler.js` holds the pure scheduling logic) — this keeps working even while the window is minimized, since closing the window hides it to the system tray instead of quitting the app (use the tray menu, or Cmd/Ctrl+Q equivalent via the tray's "Quitter", to actually exit). The renderer's own reminder polling (`src/hooks/useNotificationScheduler.ts`) skips itself when running inside Electron to avoid firing the same reminder twice. `electron/preload.js` still exposes `window.electronAPI.sendNotification` for the header's manual "test notification" button; the app falls back to the browser Notification API when not running in Electron.
+## Desktop shell (notifications OS réelles)
 
-## Learn More
+L'app peut aussi tourner dans une coquille Electron légère pour que les rappels de session déclenchent de vraies notifications de bureau au lieu des notifications navigateur. C'est un wrapper de dev uniquement — aucun packaging/installateur n'est configuré.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev        # terminal 1 — serveur Next.js
+npm run electron    # terminal 2 — fenêtre desktop
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`electron/main.js` charge `http://localhost:3000` (réessaie tant que le serveur de dev n'est pas prêt). Le processus principal interroge lui-même `/api/profile` toutes les 20s et déclenche des notifications OS natives quand un créneau de session est dû (`electron/scheduler.js` contient la logique pure de planification) — ça continue de fonctionner même fenêtre minimisée, puisque fermer la fenêtre la range dans la barre système au lieu de quitter l'app (utilisez le menu de la barre système, « Quitter », pour réellement fermer). Le polling côté renderer (`src/hooks/useNotificationScheduler.ts`) se désactive lui-même dans Electron pour éviter un rappel en double. `electron/preload.js` expose toujours `window.electronAPI.sendNotification` pour le bouton de test manuel de l'en-tête ; l'app se rabat sur l'API Notification du navigateur hors Electron.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Génération de contenu par IA (optionnel)
 
-## Deploy on Vercel
+Renseignez `GEMINI_API_KEY` dans `.env` (ou saisissez une clé directement dans l'écran d'import) pour activer l'analyse automatique de livres PDF : détection du titre/auteur/domaine, découpage en thèmes pédagogiques progressifs, puis génération des leçons et questions de quiz. Sans clé, l'import PDF ajoute seulement la référence du livre en base, sans génération.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/(app)` — espace apprenant (tableau de bord, atelier, bibliothèque, horaires, statistiques, révision)
+- `src/app/admin` — console d'administration (import de contenu, gestion des cours/quiz/utilisateurs)
+- `src/components/mobile` — écrans et coquille de la mise en page mobile, montés directement dans les mêmes routes que la version desktop via `useIsMobile()`
+- `src/lib/ingestion.ts` — extraction PDF et découpage de texte, partagés entre l'analyse et la génération
+- `prisma/schema.prisma` — modèle de données (domaines, thèmes, leçons, quiz, progression, notifications…)
