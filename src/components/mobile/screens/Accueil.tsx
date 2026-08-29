@@ -146,17 +146,17 @@ export default function MobileAccueil() {
             <div style={{ flex: 1, height: 1, background: L.rule }} />
           </div>
           {domains.map((d, i) => {
-            const locked = d.id !== profile?.currentActiveDomainId;
+            const isActive = d.id === profile?.currentActiveDomainId;
+            const isLockedOut = !!profile?.currentActiveDomainId && !isActive;
+            const state = isActive ? 'EN COURS' : isLockedOut ? 'VERROUILLÉ' : 'DISPONIBLE';
             const level = d.placementResults?.[0]?.assignedLevel || 0;
             return (
               <button
                 key={d.id}
                 onClick={() =>
-                  locked
-                    ? router.push(`/learn?domain=${d.slug}`)
-                    : activeSlug
-                      ? router.push(`/learn?domain=${d.slug}&topic=${activeSlug}`)
-                      : router.push(`/learn?domain=${d.slug}`)
+                  isActive && activeSlug
+                    ? router.push(`/learn?domain=${d.slug}&topic=${activeSlug}`)
+                    : router.push(`/learn?domain=${d.slug}`)
                 }
                 style={{
                   all: 'unset',
@@ -166,17 +166,17 @@ export default function MobileAccueil() {
                   width: '100%',
                   padding: '19px 17px',
                   marginBottom: 10,
-                  border: `1px solid ${locked ? L.rule : L.ink}`,
-                  background: locked ? 'transparent' : L.paper2,
-                  opacity: locked ? 0.74 : 1,
-                  boxShadow: locked ? 'none' : '0 12px 26px -20px oklch(0.235 0.014 60)',
+                  border: `1px solid ${isLockedOut ? L.rule : L.ink}`,
+                  background: isActive ? L.paper2 : 'transparent',
+                  opacity: isLockedOut ? 0.74 : 1,
+                  boxShadow: isActive ? '0 12px 26px -20px oklch(0.235 0.014 60)' : 'none',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12 }}>
                   <span style={{ fontSize: 10, color: L.ink3, fontVariantNumeric: 'tabular-nums' }}>
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <Chip label={locked ? 'VERROUILLÉ' : 'EN COURS'} />
+                  <Chip state={state} />
                   <div style={{ flex: 1 }} />
                   <span style={{ fontSize: 9, letterSpacing: '0.16em', color: L.ink3 }}>
                     {level ? `NIVEAU ${level} / 5` : 'NON ÉVALUÉ'}
@@ -185,10 +185,10 @@ export default function MobileAccueil() {
                 <div style={{ fontFamily: FONT_SERIF, fontSize: 25, lineHeight: 1.1, marginBottom: 8, textAlign: 'left' }}>{d.name}</div>
                 <div style={{ fontSize: 12, color: L.ink2, lineHeight: 1.65, marginBottom: 16, textAlign: 'left' }}>{d.description}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Segs level={level} wide locked={locked} />
+                  <Segs level={level} wide locked={isLockedOut} />
                   <div style={{ flex: 1 }} />
-                  <span style={{ fontSize: 10, letterSpacing: '0.14em', color: locked ? L.ink2 : EMBER, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {locked ? 'POURQUOI ?' : 'CONTINUER →'}
+                  <span style={{ fontSize: 10, letterSpacing: '0.14em', color: isLockedOut ? L.ink2 : EMBER, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {isActive ? 'CONTINUER →' : isLockedOut ? 'POURQUOI ?' : 'ALLUMER →'}
                   </span>
                 </div>
               </button>
@@ -203,21 +203,15 @@ export default function MobileAccueil() {
   );
 }
 
-function Chip({ label }: { label: string }) {
-  const on = label === 'EN COURS';
+function Chip({ state }: { state: 'EN COURS' | 'VERROUILLÉ' | 'DISPONIBLE' }) {
+  const styles: Record<typeof state, React.CSSProperties> = {
+    'EN COURS': { color: L.paper2, background: EMBER, border: `1px solid ${EMBER}` },
+    DISPONIBLE: { color: L.ink, background: 'transparent', border: `1px solid ${L.ink}` },
+    VERROUILLÉ: { color: L.ink3, background: 'transparent', border: `1px dashed ${L.rule3}` },
+  };
   return (
-    <span
-      style={{
-        fontSize: 9,
-        letterSpacing: '0.14em',
-        padding: '5px 9px',
-        whiteSpace: 'nowrap',
-        color: on ? L.paper2 : L.ink3,
-        background: on ? EMBER : 'transparent',
-        border: on ? `1px solid ${EMBER}` : `1px dashed ${L.rule3}`,
-      }}
-    >
-      {label}
+    <span style={{ fontSize: 9, letterSpacing: '0.14em', padding: '5px 9px', whiteSpace: 'nowrap', ...styles[state] }}>
+      {state}
     </span>
   );
 }
