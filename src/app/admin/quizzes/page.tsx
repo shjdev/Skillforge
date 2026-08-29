@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT } from '@/lib/theme';
 import type { DomainSummary } from '@/types/models';
+import MobileAdmin from '@/components/mobile/screens/Admin';
 
 const labelStyle: React.CSSProperties = { fontSize: 9, letterSpacing: '0.14em', color: D.text3, marginBottom: 6 };
 const inputStyle: React.CSSProperties = {
@@ -34,6 +36,12 @@ interface QuizRow {
 }
 
 export default function AdminQuizzesPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAdmin />;
+  return <AdminQuizzesDesktop />;
+}
+
+function AdminQuizzesDesktop() {
   const [quizzes, setQuizzes] = useState<QuizRow[]>([]);
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);

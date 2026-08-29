@@ -29,7 +29,7 @@ npm run dev        # terminal 1 — start the Next.js server
 npm run electron    # terminal 2 — open it in a desktop window
 ```
 
-`electron/main.js` loads `http://localhost:3000` (retrying until the dev server is up) and exposes `window.electronAPI.sendNotification` via `electron/preload.js`, which the app already uses when available (falling back to the browser Notification API otherwise).
+`electron/main.js` loads `http://localhost:3000` (retrying until the dev server is up). The main process itself polls `/api/profile` every 20s and fires native OS notifications when a session slot is due (`electron/scheduler.js` holds the pure scheduling logic) — this keeps working even while the window is minimized, since closing the window hides it to the system tray instead of quitting the app (use the tray menu, or Cmd/Ctrl+Q equivalent via the tray's "Quitter", to actually exit). The renderer's own reminder polling (`src/hooks/useNotificationScheduler.ts`) skips itself when running inside Electron to avoid firing the same reminder twice. `electron/preload.js` still exposes `window.electronAPI.sendNotification` for the header's manual "test notification" button; the app falls back to the browser Notification API when not running in Electron.
 
 ## Learn More
 

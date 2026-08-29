@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { L, EMBER } from '@/lib/theme';
+import MobileAccueil from '@/components/mobile/screens/Accueil';
 
 function SkeletonLine({ w, h = 11 }: { w?: number | string; h?: number }) {
   return <div style={{ width: w ?? '100%', height: h, background: L.paper2, border: `1px solid ${L.ruleFaint3}`, animation: 'sf-pulse 1.4s ease-in-out infinite' }} />;
@@ -26,6 +28,12 @@ interface RevisionLesson {
 }
 
 export default function RevisionPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAccueil />;
+  return <RevisionDesktop />;
+}
+
+function RevisionDesktop() {
   const [lessons, setLessons] = useState<RevisionLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());

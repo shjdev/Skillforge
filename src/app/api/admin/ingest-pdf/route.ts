@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
+import { chunkText, extractPdfText, BASE_CHUNKS, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
 
-const CHUNK_SIZE = 14_000;
 const MIN_CHUNKS = 6;
 const MAX_CHUNKS = 15;
 const LESSONS_PER_CHUNK = 2;
 const QUIZ_PASSING_SCORE = 80;
+const GENERATION_MODEL = 'gemini-3.6-flash';
 
 interface GeneratedLesson {
   title: string;
@@ -21,58 +22,91 @@ interface GeneratedQuestion {
   correctAnswer: string;
   explanation: string;
 }
-
-function chunkText(text: string, maxChunks: number): { content: string; index: number }[] {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (!clean) return [];
-  const chunks: { content: string; index: number }[] = [];
-  for (let i = 0; i < clean.length && chunks.length < maxChunks; i += CHUNK_SIZE) {
-    let end = Math.min(i + CHUNK_SIZE, clean.length);
-    if (end < clean.length) {
-      const lastStop = clean.lastIndexOf('. ', end);
-      if (lastStop > i + CHUNK_SIZE * 0.5) end = lastStop + 1;
-    }
-    chunks.push({ content: clean.slice(i, end), index: chunks.length + 1 });
-  }
-  return chunks;
+interface PlanEntry {
+  dayNumber: number;
+  title: string;
+  objective: string;
+  difficultyLevel: number;
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse');
-    const pdfData = await pdfParse(buffer);
-    const text = pdfData?.text || '';
-    if (text.trim().length < 500 && buffer.length > 1024 * 1024) {
-      console.warn('[ingest-pdf] Texte extrait quasi vide pour un gros fichier : PDF probablement scanné (images).');
-    }
-    return text;
-  } catch (err) {
-    console.warn('PDF parsing fallback to raw text extraction:', err);
-    const raw = buffer.toString('utf8');
-    return /[a-zA-Zàâçéèêëîïôùû]{4,}[\s.]/.test(raw.slice(0, 2000))
-      ? raw
-      : '';
-  }
+/**
+ * Prompt for the planning pass: reads a short overview of every chunk (in book
+ * order) and returns one syllabus entry per chunk, so that difficulty and
+ * subject progression are decided by reading the WHOLE book, not by a blind
+ * per-chunk guess. This is what gives the per-day generation calls below a
+ * shared sense of "what came before / what's next" instead of running in
+ * total isolation from each other.
+ */
+function planPrompt(chunks: { content: string; index: number }[], title: string, author: string, maxDifficultyLevel: number): string {
+  const overview = chunks
+    .map((c) => `--- Extrait ${c.index}/${chunks.length} ---\n${c.content.slice(0, PLAN_OVERVIEW_CHARS)}${c.content.length > PLAN_OVERVIEW_CHARS ? '…' : ''}`)
+    .join('\n\n');
+
+  return `Tu es un architecte pédagogique. Voici un aperçu de ${chunks.length} extraits successifs du livre "${title}" par ${author}, dans l'ordre du livre :
+
+${overview}
+
+Pour CHAQUE extrait (1 à ${chunks.length}), définis le sujet du jour de cours correspondant, de façon à ce que la progression d'un jour à l'autre soit logique et cumulative : chaque jour doit s'appuyer sur ce qui précède, sans redite ni saut de sujet incohérent. Si un extrait mélange plusieurs sujets, choisis-en un seul comme fil conducteur du jour et laisse le reste pour un jour suivant si pertinent.
+
+Attribue à chaque jour un niveau de difficulté de 1 à ${maxDifficultyLevel} qui reflète la VRAIE complexité pédagogique du contenu (pas juste sa position dans le livre) : 1 = notions de base sans prérequis, ${maxDifficultyLevel} = expert. La difficulté doit rester globalement progressive sur l'ensemble du cursus.
+
+Réponds STRICTEMENT en JSON valide selon ce schéma, avec exactement un élément par extrait :
+{
+  "plan": [
+    { "dayNumber": 1, "title": "Titre concis du sujet du jour", "objective": "Ce que l'apprenant doit comprendre/savoir faire à la fin de ce jour, en une phrase", "difficultyLevel": 1 }
+  ]
+}`;
 }
 
-function lessonPrompt(chunk: { content: string; index: number }, title: string, author: string, totalChunks: number, difficultyLevel: number): string {
+function lessonPrompt(
+  chunk: { content: string; index: number },
+  title: string,
+  author: string,
+  totalChunks: number,
+  difficultyLevel: number,
+  context: { current?: PlanEntry; prev?: PlanEntry; next?: PlanEntry },
+  planOverview: string,
+  prevGenerated?: { title: string; concepts: string[] }
+): string {
   const dayNumber = chunk.index;
   const secondSession = dayNumber % 2 === 0 ? 'EVENING' : 'MORNING';
   const firstSession = secondSession === 'MORNING' ? 'EVENING' : 'MORNING';
-  return `Tu es un expert pédagogique en ingénierie informatique.
-À partir de l'extrait ${chunk.index}/${totalChunks} du livre "${title}" par ${author} :
+
+  const continuityLines = [
+    planOverview ? `Cursus complet (chaque jour est un maillon ; respectez l'arc global) :\n${planOverview}` : '',
+    context.current
+      ? `Sujet imposé pour ce jour : "${context.current.title}" — Objectif pédagogique : ${context.current.objective}`
+      : '',
+    context.prev
+      ? `Au plan, le jour précédent couvrait : "${context.prev.title}" (n'y revenez pas, sauf un rappel d'une phrase si utile pour enchaîner)`
+      : "C'est le premier jour du cursus : aucun rappel nécessaire.",
+    prevGenerated
+      ? `Rappel du contenu RÉELLEMENT généré hier — "${prevGenerated.title}" — concepts abordés : ${prevGenerated.concepts.slice(0, 6).join(' ; ')}. Ouvrez votre leçon par une transition naturelle depuis ces notions et ne les réexpliquez pas.`
+      : '',
+    context.next
+      ? `Jour suivant (réservé pour plus tard, ne le traitez pas aujourd'hui) : "${context.next.title}"`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `Tu es un expert pédagogique en ingénierie informatique, en train d'écrire le JOUR ${dayNumber}/${totalChunks} d'un cursus cohérent et progressif basé sur le livre "${title}" par ${author}.
+
+${continuityLines}
+
+Extrait source à utiliser pour ce jour :
 ---
 ${chunk.content}
 ---
 
-Génère exactement 2 leçons pédagogiques complètes correspondant au JOUR ${dayNumber} du cursus :
-- Leçon 1 : session de type ${firstSession} (théorie).
-- Leçon 2 : session de type ${secondSession} (pratique / exercices d'application).
+Génère exactement 2 leçons pour ce jour :
+- Leçon 1 (session ${firstSession}) : théorie. Structure Markdown obligatoire : "## Introduction" (pourquoi ce sujet compte, lien avec le jour précédent, 2-3 phrases), "## Développement" (au moins 3 sous-parties en "###", chacune expliquée en profondeur avec au moins un exemple concret chiffré ou un cas réel), "## Pièges courants" (erreurs fréquentes de débutant sur ce sujet), "## Points clés à retenir" (liste synthétique). MINIMUM 800 MOTS rédigés en paragraphes complets et non en simples puces — un résumé court est refusé.
+- Leçon 2 (session ${secondSession}) : pratique. Un exercice ou cas d'application directement lié à la théorie du jour, avec énoncé, étapes de résolution guidées numérotées, et une correction commentée expliquant POURQUOI chaque étape est correcte. MINIMUM 500 MOTS.
 - Rédige en Français de haute qualité.
 - TOUS les termes techniques doivent impérativement être suivis de leur terme d'origine en Anglais entre parenthèses. Ex : "Le protocole de transport (Transport Layer)".
 - Inclus les citations précises du livre (chapitre et pages si identifiables).
-- Niveau de difficulté cible : ${difficultyLevel}/5.
+- Niveau de difficulté imposé pour ce jour : ${difficultyLevel}/5, où 1 = vocabulaire simple, définitions intuitives, aucun prérequis ; 2 = notions de base illustrées ; 3 = intermédiaire, mécanismes détaillés et terminologie technique assumée ; 4 = avancé, cas complexes, compromis et subtilités ; 5 = expert, analyse critique et cas limites. Adapte vocabulaire, profondeur et exemples à ce niveau exact.
+- Reste strictement dans le sujet du jour défini ci-dessus ; ne traite pas le sujet du jour suivant.
 
 Réponds STRICTEMENT au format JSON valide selon ce schéma :
 {
@@ -80,37 +114,78 @@ Réponds STRICTEMENT au format JSON valide selon ce schéma :
     {
       "title": "Titre de la leçon",
       "sessionType": "${firstSession}",
-      "contentMd": "# Titre\\n\\nContenu rédigé...",
+      "contentMd": "## Introduction\\n\\n...\\n\\n## Développement\\n\\n### Sous-partie 1\\n\\n...",
       "chapterCitation": "Chapitre X, pp. Y-Z",
       "keyConcepts": ["Concept 1 (English 1)", "Concept 2 (English 2)"]
     },
     {
       "title": "Titre de la leçon pratique",
       "sessionType": "${secondSession}",
-      "contentMd": "# Pratique\\n\\nExercice...",
+      "contentMd": "## Énoncé\\n\\n...\\n\\n## Résolution guidée\\n\\n...\\n\\n## Correction commentée\\n\\n...",
       "chapterCitation": "Chapitre X, pp. Y-Z",
       "keyConcepts": ["Concept A (English A)"]
     }
   ],
   "quizQuestions": [
     {
-      "questionText": "Question sur le contenu de CET extrait",
+      "questionText": "Question sur le contenu de CE jour",
       "options": ["Réponse A", "Réponse B", "Réponse C", "Réponse D"],
       "correctAnswer": "Réponse A",
       "explanation": "Pourquoi cette réponse est correcte"
     }
   ]
 }
-Génère entre 2 et 3 quizQuestions couvrant uniquement le contenu de cet extrait.`;
+Génère entre 2 et 3 quizQuestions couvrant uniquement le sujet de ce jour.`;
+}
+
+export function stripJsonFence(responseText: string): string {
+  return responseText.replace(/```json\n?|\n?```/g, '').trim();
 }
 
 function parseAiJson(responseText: string): { lessons: GeneratedLesson[]; quizQuestions: GeneratedQuestion[] } {
-  const cleanJson = responseText.replace(/```json\n?|\n?```/g, '').trim();
-  const parsed = JSON.parse(cleanJson);
+  const parsed = JSON.parse(stripJsonFence(responseText));
   return {
     lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
     quizQuestions: Array.isArray(parsed.quizQuestions) ? parsed.quizQuestions : [],
   };
+}
+
+/**
+ * Runs the planning pass and returns a syllabus keyed by chunk/day number.
+ * Returns null (rather than throwing) on any failure so the caller can fall
+ * back to independent per-chunk generation instead of failing the whole job.
+ */
+async function generatePlan(
+  ai: GoogleGenAI,
+  chunks: { content: string; index: number }[],
+  title: string,
+  author: string,
+  maxDifficultyLevel: number
+): Promise<Map<number, PlanEntry> | null> {
+  try {
+    const response = await ai.models.generateContent({
+      model: GENERATION_MODEL,
+      contents: planPrompt(chunks, title, author, maxDifficultyLevel),
+    });
+    const parsed = JSON.parse(stripJsonFence(response.text || ''));
+    const entries: unknown[] = Array.isArray(parsed.plan) ? parsed.plan : [];
+
+    const map = new Map<number, PlanEntry>();
+    for (const raw of entries) {
+      const e = raw as Partial<PlanEntry> | null;
+      if (!e || typeof e.dayNumber !== 'number') continue;
+      map.set(e.dayNumber, {
+        dayNumber: e.dayNumber,
+        title: String(e.title || `Jour ${e.dayNumber}`),
+        objective: String(e.objective || ''),
+        difficultyLevel: Math.max(1, Math.min(maxDifficultyLevel, Math.round(Number(e.difficultyLevel)) || 1)),
+      });
+    }
+    return map.size > 0 ? map : null;
+  } catch (err) {
+    console.error('[ingest-pdf] Échec de la planification du cursus, repli sur une génération sans continuité :', err);
+    return null;
+  }
 }
 
 async function processIngestJob(jobId: string, params: {
@@ -125,32 +200,62 @@ async function processIngestJob(jobId: string, params: {
   try {
     await prisma.ingestJob.update({
       where: { id: jobId },
-      data: { status: 'RUNNING', totalChunks: chunks.length },
+      data: { status: 'RUNNING', totalChunks: chunks.length, message: 'Planification du cursus…' },
     });
 
     const ai = new GoogleGenAI({ apiKey });
+    const plan = await generatePlan(ai, chunks, title, author, maxDifficultyLevel);
+
+    // Vue d'ensemble du cursus : chaque appel de génération voit l'arc complet.
+    const planOverview = plan
+      ? Array.from(plan.values())
+          .sort((a, b) => a.dayNumber - b.dayNumber)
+          .map((e) => `- Jour ${e.dayNumber} : ${e.title}${e.objective ? ` (${e.objective})` : ''}`)
+          .join('\n')
+      : '';
 
     const allLessons: (GeneratedLesson & { dayNumber: number; difficultyLevel: number })[] = [];
     const allQuestions: GeneratedQuestion[] = [];
+    let prevGenerated: { title: string; concepts: string[] } | undefined;
 
     for (const chunk of chunks) {
-      const difficultyLevel = Math.max(1, Math.min(maxDifficultyLevel, Math.ceil((chunk.index / chunks.length) * maxDifficultyLevel)));
+      const planEntry = plan?.get(chunk.index);
+      const difficultyLevel =
+        planEntry?.difficultyLevel ??
+        Math.max(1, Math.min(maxDifficultyLevel, Math.ceil((chunk.index / chunks.length) * maxDifficultyLevel)));
+      const context = { current: planEntry, prev: plan?.get(chunk.index - 1), next: plan?.get(chunk.index + 1) };
+
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
-          contents: lessonPrompt(chunk, title, author, chunks.length, difficultyLevel),
+          model: GENERATION_MODEL,
+          contents: lessonPrompt(chunk, title, author, chunks.length, difficultyLevel, context, planOverview, prevGenerated),
         });
         const { lessons, quizQuestions } = parseAiJson(response.text || '');
         for (let i = 0; i < Math.min(lessons.length, LESSONS_PER_CHUNK); i++) {
           allLessons.push({ ...lessons[i], dayNumber: chunk.index, difficultyLevel });
         }
         allQuestions.push(...quizQuestions);
+
+        // Continuité réelle : la génération du jour suivant s'appuiera sur ce qui
+        // vient d'être produit (et pas seulement sur le plan théorique).
+        const theoryLesson = lessons.find((l) => (l.keyConcepts || []).length > 0);
+        if (theoryLesson) {
+          prevGenerated = {
+            title: theoryLesson.title,
+            concepts: (theoryLesson.keyConcepts || []).filter((c) => typeof c === 'string'),
+          };
+        }
       } catch (err) {
         console.error(`[ingest-pdf] Échec de génération pour l'extrait ${chunk.index}/${chunks.length} :`, err);
       }
       await prisma.ingestJob.update({
         where: { id: jobId },
-        data: { processedChunks: chunk.index, lessonsCreated: allLessons.length, questionsCreated: allQuestions.length },
+        data: {
+          processedChunks: chunk.index,
+          lessonsCreated: allLessons.length,
+          questionsCreated: allQuestions.length,
+          message: plan ? 'Génération selon le plan de cours…' : 'Génération (sans plan — extraits traités indépendamment)…',
+        },
       });
     }
 
@@ -236,9 +341,10 @@ async function processIngestJob(jobId: string, params: {
         lessonsCreated: allLessons.length,
         questionsCreated: allQuestions.length,
         message:
-          `${allLessons.length} leçons et ${allQuestions.length} questions créées. ` +
+          `${allLessons.length} leçons et ${allQuestions.length} questions créées` +
+          (plan ? ' (avec plan de cursus cohérent).' : ' (plan indisponible — extraits traités indépendamment).') +
           (allLessons.length < chunks.length * LESSONS_PER_CHUNK
-            ? `${chunks.length - allLessons.length / LESSONS_PER_CHUNK} extrait(s) ont échoué et peuvent être relancés.`
+            ? ` ${chunks.length - allLessons.length / LESSONS_PER_CHUNK} extrait(s) ont échoué et peuvent être relancés.`
             : ''),
       },
     });
@@ -260,6 +366,10 @@ export async function POST(request: Request) {
     const domainId = formData.get('domainId') as string;
     const topicId = formData.get('topicId') as string;
     const apiKey = (formData.get('apiKey') as string) || process.env.GEMINI_API_KEY;
+    // Tranche d'extraits (import automatique multi-thèmes) : bornes 1-based incluses.
+    const chunkStart = parseInt(formData.get('chunkStart') as string) || 0;
+    const chunkEnd = parseInt(formData.get('chunkEnd') as string) || 0;
+    const hasChunkRange = chunkStart >= 1 && chunkEnd >= chunkStart;
 
     if (!domainId || !topicId) {
       return NextResponse.json({ error: 'Le domaine et le topic sont requis' }, { status: 400 });
@@ -313,10 +423,13 @@ export async function POST(request: Request) {
       });
     }
 
-    // Volume aligné sur la durée prévue du thème : 2 leçons/jour, ~7 jours/semaine,
-    // plafonné à MAX_CHUNKS pour maîtriser le coût et la durée de génération.
-    const maxChunks = Math.max(MIN_CHUNKS, Math.min(topic.estimatedWeeks * 7, MAX_CHUNKS));
-    const chunks = chunkText(extractedText, maxChunks);
+    // Deux modes de découpage :
+    // - tranche explicite (import automatique) : découpage de référence sur
+    //   BASE_CHUNKS pour que les bornes correspondent à celles de l'analyse ;
+    // - sinon volume aligné sur la durée prévue du thème (mode manuel).
+    const chunks = hasChunkRange
+      ? chunkText(extractedText, BASE_CHUNKS).slice(chunkStart - 1, chunkEnd)
+      : chunkText(extractedText, Math.max(MIN_CHUNKS, Math.min(topic.estimatedWeeks * 7, MAX_CHUNKS)));
     if (chunks.length === 0) {
       return NextResponse.json({ error: 'Le texte fourni est vide.' }, { status: 422 });
     }

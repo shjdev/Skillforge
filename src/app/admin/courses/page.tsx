@@ -2,13 +2,21 @@
 
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER } from '@/lib/theme';
 import type { AdminLessonRow, CourseDomain, CourseTopic } from '@/types/models';
 import { CreateDomainForm } from '@/components/admin/CreateDomainForm';
 import { CreateTopicForm } from '@/components/admin/CreateTopicForm';
 import { CreateLessonForm } from '@/components/admin/CreateLessonForm';
+import MobileAdmin from '@/components/mobile/screens/Admin';
 
 export default function AdminCoursesPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAdmin />;
+  return <AdminCoursesDesktop />;
+}
+
+function AdminCoursesDesktop() {
   const queryClient = useQueryClient();
   const [domainEditor, setDomainEditor] = useState<CourseDomain | 'new' | null>(null);
   const [themeFormDomainId, setThemeFormDomainId] = useState<string | null>(null);

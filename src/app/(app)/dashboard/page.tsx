@@ -4,12 +4,20 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMounted } from '@/hooks/useMounted';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { L, EMBER, formatPoints } from '@/lib/theme';
 import type { DomainSummary } from '@/types/models';
+import MobileAccueil from '@/components/mobile/screens/Accueil';
 
 const DOMAIN_COUNT = 5;
 
 export default function DashboardPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAccueil />;
+  return <DashboardDesktop />;
+}
+
+function DashboardDesktop() {
   const userProfile = useAppStore((state) => state.userProfile);
   const mounted = useMounted();
   const [domains, setDomains] = useState<DomainSummary[]>([]);

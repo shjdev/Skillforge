@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { L, EMBER } from '@/lib/theme';
+import MobileLivres from '@/components/mobile/screens/Livres';
 
 interface LibraryBook {
   id: string;
@@ -13,6 +15,12 @@ interface LibraryBook {
 }
 
 export default function LibraryPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileLivres />;
+  return <LibraryDesktop />;
+}
+
+function LibraryDesktop() {
   const { data, isLoading } = useQuery({
     queryKey: ['books'],
     queryFn: async (): Promise<LibraryBook[]> => {

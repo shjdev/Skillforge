@@ -2,8 +2,10 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT, formatPoints } from '@/lib/theme';
 import type { AdminUserOverview, CourseDomain } from '@/types/models';
+import MobileAdmin from '@/components/mobile/screens/Admin';
 
 interface ActivityRow {
   time: string;
@@ -13,6 +15,12 @@ interface ActivityRow {
 }
 
 export default function AdminDashboardPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAdmin />;
+  return <AdminDashboardDesktop />;
+}
+
+function AdminDashboardDesktop() {
   const { data: courses } = useQuery<CourseDomain[]>({
     queryKey: ['admin-domains'],
     queryFn: async () => {

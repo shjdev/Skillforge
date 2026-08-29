@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { L, EMBER, VERDANT } from '@/lib/theme';
+import MobileHoraires from '@/components/mobile/screens/Horaires';
 
 interface ProfileData {
   id: string;
@@ -233,6 +235,12 @@ function ScheduleForm({ profile }: { profile: ProfileData }) {
 }
 
 export default function SchedulePage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileHoraires />;
+  return <ScheduleDesktop />;
+}
+
+function ScheduleDesktop() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
   useEffect(() => {

@@ -2,8 +2,10 @@
 
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT, formatPoints } from '@/lib/theme';
 import type { AdminUserOverview } from '@/types/models';
+import MobileAdmin from '@/components/mobile/screens/Admin';
 
 const inputStyle: React.CSSProperties = {
   all: 'unset',
@@ -56,6 +58,12 @@ function ProfileCell({ user }: { user: AdminUserOverview['user'] }) {
 }
 
 export default function AdminUsersPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAdmin />;
+  return <AdminUsersDesktop />;
+}
+
+function AdminUsersDesktop() {
   const { data, isLoading, error } = useQuery<AdminUserOverview>({
     queryKey: ['admin-user-overview'],
     queryFn: async () => {

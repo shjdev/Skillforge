@@ -7,8 +7,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { L, EMBER, VERDANT } from '@/lib/theme';
 import { useAppStore, type UserProfileState } from '@/stores/useAppStore';
 import { todayKey } from '@/hooks/useNotificationScheduler';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { LessonProse } from '@/components/learn/LessonProse';
 import { TestFlow } from '@/components/learn/TestFlow';
+import MobileAtelier from '@/components/mobile/screens/Atelier';
 import type { DomainSummary, PlacementTestInfo, TopicDetailResponse } from '@/types/models';
 
 interface LockErrorPayload {
@@ -651,9 +653,10 @@ function LearnContent() {
 }
 
 export default function LearnPage() {
+  const isMobile = useIsMobile();
   return (
     <Suspense fallback={<div style={{ padding: '44px 52px', color: L.ink3, fontSize: 12 }}>Chargement…</div>}>
-      <LearnContent />
+      {isMobile ? <MobileAtelier /> : <LearnContent />}
     </Suspense>
   );
 }

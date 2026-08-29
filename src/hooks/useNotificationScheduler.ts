@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { resolveDueReminder } from '@/lib/notifications';
 
 const emptySubscribe = () => () => {};
 
@@ -15,7 +16,6 @@ export function useNotificationPermission(): NotificationPermission | 'unsupport
 }
 
 const CHECK_INTERVAL_MS = 20_000;
-const FIRE_WINDOW_MIN = 20;
 const FIRED_KEY_PREFIX = 'skillforge-reminder-fired-';
 
 function localDateKey(): string {
@@ -27,44 +27,19 @@ export function todayKey(slot: string): string {
   return `${FIRED_KEY_PREFIX}${slot}-${localDateKey()}`;
 }
 
-/** Minutes since local midnight for a "HH:MM" string. */
-function slotMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-/**
- * True when the current local time falls inside the firing window of the slot
- * (slot time to slot time + FIRE_WINDOW_MIN). Tolerates the app being opened
- * a few minutes late instead of requiring an exact minute match.
- */
-function isSlotDue(hhmm: string | undefined): boolean {
-  if (!hhmm) return false;
-  const now = new Date();
-  const nowM = now.getHours() * 60 + now.getMinutes();
-  const start = slotMinutes(hhmm);
-  return nowM >= start && nowM < start + FIRE_WINDOW_MIN;
-}
-
 function fireNotification(title: string, body: string) {
   if (typeof window === 'undefined') return;
-
-  if (window.electronAPI?.isElectron) {
-    window.electronAPI.sendNotification({ title, body });
-    return;
-  }
-
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, { body, icon: '/favicon.ico' });
   }
 }
 
 /**
- * Client-side reminder scheduler. Since there is no real OS-level scheduling
- * without a packaged Electron shell, this polls the clock while the app tab
- * is open and fires a Web Notification (or the electronAPI bridge if present)
- * when a configured session time is reached. Each slot fires at most once/day
- * (tracked in localStorage) to avoid repeat pop-ups.
+ * Client-side reminder scheduler for the browser tab. When running inside
+ * the Electron shell, the main process schedules and fires reminders itself
+ * (see electron/main.js + electron/scheduler.js) so it keeps working even
+ * when the window is minimized to the tray — this hook stays a no-op there
+ * to avoid firing the same reminder twice.
  */
 export function useNotificationScheduler() {
   const userProfile = useAppStore((state) => state.userProfile);
@@ -75,39 +50,22 @@ export function useNotificationScheduler() {
   }, [userProfile]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI?.isElectron) return;
+
     const check = () => {
       const profile = profileRef.current;
       if (!profile) return;
 
-      if (profile.sessionMode === 'ONE_SESSION') {
-        if (isSlotDue(profile.singleSessionTime)) {
-          const key = todayKey('single');
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, '1');
-            fireNotification('SkillForge — Session du jour', 'C’est l’heure de votre session d’apprentissage !');
-          }
-        }
-      } else {
-        if (isSlotDue(profile.morningTime)) {
-          const key = todayKey('morning');
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, '1');
-            fireNotification('SkillForge — Session du matin', 'C’est l’heure de votre session du matin (30 min).');
-          }
-        }
-        if (isSlotDue(profile.eveningTime)) {
-          const key = todayKey('evening');
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, '1');
-            const morningDone = !!localStorage.getItem(todayKey('morning-completed'));
-            fireNotification(
-              'SkillForge — Session du soir',
-              morningDone
-                ? 'C’est l’heure de votre session du soir (30 min).'
-                : 'Session du soir : pensez à cumuler si vous avez manqué le matin (jusqu’à 60 min).'
-            );
-          }
-        }
+      const firedKeys = new Set<string>();
+      if (localStorage.getItem(todayKey('single'))) firedKeys.add('single');
+      if (localStorage.getItem(todayKey('morning'))) firedKeys.add('morning');
+      if (localStorage.getItem(todayKey('evening'))) firedKeys.add('evening');
+      const morningDone = !!localStorage.getItem(todayKey('morning-completed'));
+
+      const due = resolveDueReminder(profile, new Date(), firedKeys, morningDone);
+      if (due) {
+        localStorage.setItem(todayKey(due.key), '1');
+        fireNotification(due.title, due.body);
       }
     };
     check();

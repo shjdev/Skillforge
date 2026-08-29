@@ -25,7 +25,10 @@ export const Header = () => {
   const detectedPermission = useNotificationPermission();
   const [permissionOverride, setPermissionOverride] = useState<NotificationPermission | 'unsupported' | null>(null);
   const permission = permissionOverride ?? detectedPermission;
-  const notifsActive = permission === 'granted';
+  // Electron notifications don't go through the browser permission API — the
+  // main process schedules and fires them directly, so they're always "on".
+  const isElectron = mounted && typeof window !== 'undefined' && !!window.electronAPI?.isElectron;
+  const notifsActive = isElectron || permission === 'granted';
 
   const handleBellClick = async () => {
     if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {

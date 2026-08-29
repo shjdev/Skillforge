@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMounted } from '@/hooks/useMounted';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileShell } from '@/components/mobile/MobileShell';
 import { D, EMBER } from '@/lib/theme';
 
 const navItems = [
@@ -19,6 +21,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const userProfile = useAppStore((state) => state.userProfile);
   const mounted = useMounted();
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileShell>{children}</MobileShell>;
+  }
 
   return (
     <div style={{ minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', background: D.bg, color: D.text, fontFamily: 'var(--font-mono-ui)' }}>

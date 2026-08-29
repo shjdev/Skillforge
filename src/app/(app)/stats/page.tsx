@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { L, EMBER } from '@/lib/theme';
+import MobileAccueil from '@/components/mobile/screens/Accueil';
 
 interface DayStat {
   date: string;
@@ -33,6 +35,12 @@ function SkeletonBlock({ h }: { h: number }) {
 }
 
 export default function StatsPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAccueil />;
+  return <StatsDesktop />;
+}
+
+function StatsDesktop() {
   const [data, setData] = useState<StatsData | null>(null);
 
   useEffect(() => {

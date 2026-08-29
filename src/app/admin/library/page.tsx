@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT } from '@/lib/theme';
 import type { DomainSummary } from '@/types/models';
+import MobileAdmin from '@/components/mobile/screens/Admin';
 
 const labelStyle: React.CSSProperties = { fontSize: 9, letterSpacing: '0.14em', color: D.text3, marginBottom: 6 };
 const inputStyle: React.CSSProperties = {
@@ -21,47 +23,133 @@ interface LogLine {
   kind: 'info' | 'success' | 'error';
 }
 
+interface AnalysisTopic {
+  name: string;
+  slug: string;
+  description: string;
+  estimatedWeeks: number;
+  maxDifficultyLevel: number;
+  chunkStart: number;
+  chunkEnd: number;
+}
+
+interface BookAnalysis {
+  isTeachable: boolean;
+  rejectionReason: string;
+  detectedTitle: string;
+  detectedAuthor: string;
+  summary: string;
+  domainId: string | null;
+  newDomain: { name: string; description: string; color: string } | null;
+  topics: AnalysisTopic[];
+}
+
+interface ReviewTopic extends AnalysisTopic {
+  include: boolean;
+}
+
+interface BookRow {
+  id: string;
+  title: string;
+  author: string;
+  addedAt: string;
+  lessonsCount: number;
+  topics: string[];
+}
+
+type Phase = 'idle' | 'analyzing' | 'review' | 'launching';
+
 export default function AdminLibraryPage() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileAdmin />;
+  return <AdminLibraryDesktop />;
+}
+
+function AdminLibraryDesktop() {
+  const [phase, setPhase] = useState<Phase>('idle');
   const [file, setFile] = useState<File | null>(null);
+  const [apiKey, setApiKey] = useState('');
+
+  // Résultat de l'analyse + état éditable de l'écran de validation
+  const [analysis, setAnalysis] = useState<BookAnalysis | null>(null);
+  const [totalChunks, setTotalChunks] = useState(0);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
-  const [selectedTopic, setSelectedTopic] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [domainChoice, setDomainChoice] = useState<string>('');
+  const [newDomain, setNewDomain] = useState({ name: '', description: '', color: '#3b82f6' });
+  const [reviewTopics, setReviewTopics] = useState<ReviewTopic[]>([]);
+  const [chainPrereqs, setChainPrereqs] = useState(true);
+
   const [domains, setDomains] = useState<DomainSummary[]>([]);
-  const [loading, setLoading] = useState(false);
   const [log, setLog] = useState<LogLine[]>([
-    { t: '—', text: 'Aucun import en cours.', kind: 'info' },
-    { t: '—', text: 'Déposez un PDF ou un fichier texte pour générer des leçons.', kind: 'info' },
-    { t: '—', text: "Chaque leçon citera le chapitre et la page d'origine.", kind: 'info' },
+    { t: '—', text: "Déposez un PDF : l'IA détecte le titre, l'auteur, le domaine et les thèmes.", kind: 'info' },
+    { t: '—', text: 'Vous validez la proposition avant la génération des leçons.', kind: 'info' },
   ]);
+  const [books, setBooks] = useState<BookRow[]>([]);
 
   useEffect(() => {
     fetch('/api/domains')
       .then((res) => res.json())
       .then((data) => {
-        if (data.domains) {
-          setDomains(data.domains);
-          if (data.domains.length > 0) {
-            setSelectedDomain(data.domains[0].id);
-            if (data.domains[0].topics && data.domains[0].topics.length > 0) {
-              setSelectedTopic(data.domains[0].topics[0].id);
-            }
-          }
-        }
+        if (data.domains) setDomains(data.domains);
       });
+    refreshBooks();
   }, []);
 
   const stamp = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const addLog = (text: string, kind: LogLine['kind'] = 'info') =>
+    setLog((l) => [...l, { t: stamp(), text, kind }]);
 
-  const handleDomainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const dId = e.target.value;
-    setSelectedDomain(dId);
-    const domainObj = domains.find((d) => d.id === dId);
-    if (domainObj && domainObj.topics && domainObj.topics.length > 0) {
-      setSelectedTopic(domainObj.topics[0].id);
-    } else {
-      setSelectedTopic('');
+  function refreshBooks() {
+    fetch('/api/admin/books')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.books) setBooks(data.books);
+      });
+  }
+
+  const handleFileSelected = (f: File) => {
+    setFile(f);
+    setPhase('idle');
+    setAnalysis(null);
+    if (!title) setTitle(f.name.replace(/\.[^/.]+$/, ''));
+  };
+
+  const handleAnalyze = async () => {
+    if (!file) return;
+    setPhase('analyzing');
+    setLog([{ t: stamp(), text: `Analyse du document — ${file.name}…`, kind: 'info' }]);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (apiKey) fd.append('apiKey', apiKey);
+      const res = await fetch('/api/admin/analyze-book', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Échec de l'analyse");
+      const a: BookAnalysis = data.analysis;
+
+      if (!a.isTeachable) {
+        addLog(`Document non enseignable : ${a.rejectionReason || 'contenu inadapté.'}`, 'error');
+        setPhase('idle');
+        return;
+      }
+
+      setAnalysis(a);
+      setTotalChunks(data.totalChunks || 0);
+      setTitle(a.detectedTitle || title);
+      setAuthor(a.detectedAuthor || '');
+      setDomainChoice(a.domainId ? `existing:${a.domainId}` : a.newDomain ? 'new' : '');
+      if (a.newDomain) setNewDomain(a.newDomain);
+      setReviewTopics(a.topics.map((t) => ({ ...t, include: true })));
+      setChainPrereqs(true);
+      addLog(
+        `Analyse terminée : ${a.topics.length} thème(s) détecté(s), domaine ${a.domainId ? 'existant reconnu' : a.newDomain ? `à créer (« ${a.newDomain.name} »)` : 'non déterminé'}. Validez ci-dessous.`,
+        'success'
+      );
+      setPhase('review');
+    } catch (err) {
+      addLog(err instanceof Error ? err.message : "Erreur lors de l'analyse.", 'error');
+      setPhase('idle');
     }
   };
 
@@ -69,115 +157,182 @@ export default function AdminLibraryPage() {
 
   interface JobState {
     status: string;
-    totalChunks: number;
     processedChunks: number;
+    totalChunks: number;
     lessonsCreated: number;
     questionsCreated: number;
     message?: string | null;
     error?: string;
   }
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !selectedDomain || !selectedTopic) {
-      setLog((l) => [...l, { t: stamp(), text: 'Titre, domaine et sujet sont requis.', kind: 'error' }]);
+  const pollJob = async (jobId: string): Promise<JobState> => {
+    let lastProcessed = -1;
+    for (;;) {
+      await sleep(3000);
+      const res = await fetch(`/api/admin/ingest-pdf?jobId=${jobId}`);
+      const job: JobState = await res.json();
+      if (job.error) throw new Error(job.error);
+      if (job.processedChunks !== lastProcessed && job.status === 'RUNNING') {
+        lastProcessed = job.processedChunks;
+        addLog(`Extrait ${job.processedChunks}/${job.totalChunks} · ${job.lessonsCreated} leçon(s)…`);
+      }
+      if (job.status === 'DONE' || job.status === 'ERROR') return job;
+    }
+  };
+
+  const handleLaunch = async () => {
+    const selected = reviewTopics.filter((t) => t.include);
+    if (!title.trim() || !domainChoice || selected.length === 0) {
+      addLog('Titre, domaine et au moins un thème sont requis.', 'error');
       return;
     }
+    setPhase('launching');
 
-    setLoading(true);
-    setLog([
-      { t: stamp(), text: file ? `Fichier reçu — ${file.name}` : 'Texte de référence reçu (sans fichier)', kind: 'info' },
-      { t: stamp(), text: 'Envoi au service de génération…', kind: 'info' },
-    ]);
-
-    const formData = new FormData();
-    if (file) formData.append('file', file);
-    formData.append('title', title);
-    formData.append('author', author || 'Auteur Inconnu');
-    formData.append('domainId', selectedDomain);
-    formData.append('topicId', selectedTopic);
-    if (apiKey) formData.append('apiKey', apiKey);
-
-    let done = false;
     try {
-      const res = await fetch('/api/admin/ingest-pdf', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur d'ingestion");
-
-      if (!data.jobId) {
-        setLog((l) => [
-          ...l,
-          { t: stamp(), text: data.message || 'Livre ajouté à la bibliothèque.', kind: 'success' },
-        ]);
+      // 1. Domaine : existant ou création
+      let domainId: string;
+      if (domainChoice.startsWith('existing:')) {
+        domainId = domainChoice.slice('existing:'.length);
+        addLog(`Domaine cible : ${domains.find((d) => d.id === domainId)?.name || domainId}.`);
       } else {
-        setLog((l) => [
-          ...l,
-          { t: stamp(), text: `Tâche lancée — ${data.totalChunks} extrait(s) de livre à analyser.`, kind: 'info' },
+        if (newDomain.name.trim().length < 3) throw new Error('Nom du nouveau domaine trop court.');
+        const maxOrder = domains.reduce((m, d) => Math.max(m, d.order), 0);
+        const slug = newDomain.name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        const res = await fetch('/api/admin/domains', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newDomain.name.trim(),
+            slug,
+            description: newDomain.description || `Domaine créé depuis l'import de « ${title} ».`,
+            icon: 'BookOpen',
+            color: newDomain.color,
+            order: maxOrder + 1,
+            isActive: true,
+          }),
+        });
+        const created = (await res.json()) as {
+          id?: string;
+          name?: string;
+          description?: string;
+          error?: string;
+          details?: { message?: string }[];
+        };
+        if (!res.ok || !created.id) {
+          throw new Error(created.details?.[0]?.message || created.error || 'Échec de la création du domaine.');
+        }
+        domainId = created.id;
+        setDomains((d) => [
+          ...d,
+          {
+            id: created.id as string,
+            name: created.name ?? newDomain.name.trim(),
+            slug,
+            description: created.description ?? '',
+            icon: 'BookOpen',
+            color: newDomain.color,
+            order: maxOrder + 1,
+            isActive: true,
+            topics: [],
+          },
         ]);
-        let lastProcessed = -1;
-        while (!done) {
-          await sleep(3000);
-          const jobRes = await fetch(`/api/admin/ingest-pdf?jobId=${data.jobId}`);
-          const job: JobState = await jobRes.json();
-          if (job.error) throw new Error(job.error);
-          if (job.processedChunks !== lastProcessed) {
-            lastProcessed = job.processedChunks;
-            setLog((l) => [
-              ...l,
-              {
-                t: stamp(),
-                text:
-                  job.status === 'DONE'
-                    ? `Terminé : ${job.lessonsCreated} leçon(s) et ${job.questionsCreated} question(s) générées.${job.message ? ` ${job.message}` : ''}`
-                    : job.status === 'ERROR'
-                      ? job.message || 'La génération a échoué.'
-                      : `Extrait ${job.processedChunks}/${job.totalChunks} traité · ${job.lessonsCreated} leçon(s)…`,
-                kind: job.status === 'DONE' ? 'success' : job.status === 'ERROR' ? 'error' : 'info',
-              },
-            ]);
+        addLog(`Nouveau domaine créé : « ${created.name ?? newDomain.name.trim()} ».`, 'success');
+      }
+
+      // 2. Thèmes : réutilisation par slug ou création (avec chaîne de prérequis)
+      const existingSlugs = new Map<string, string>();
+      try {
+        const coursesRes = await fetch('/api/admin/courses');
+        const courses = await coursesRes.json();
+        for (const d of Array.isArray(courses) ? courses : []) {
+          for (const t of d.topics || []) existingSlugs.set(t.slug, t.id);
+        }
+      } catch {
+        /* catalogue indisponible : on créera simplement */
+      }
+
+      let prevTopicId: string | null = null;
+      const topicTargets: { id: string; name: string; topic: ReviewTopic }[] = [];
+      for (const t of selected) {
+        const foundId: string | undefined = existingSlugs.get(t.slug);
+        if (foundId) {
+          topicTargets.push({ id: foundId, name: t.name, topic: t });
+          prevTopicId = foundId;
+          addLog(`Thème existant réutilisé : « ${t.name} ».`);
+          continue;
+        }
+        const res = await fetch('/api/admin/topics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            domainId,
+            name: t.name,
+            slug: t.slug,
+            description: t.description || `Thème issu du livre « ${title} ».`,
+            maxDifficultyLevel: t.maxDifficultyLevel,
+            estimatedWeeks: t.estimatedWeeks,
+            prerequisites: chainPrereqs && prevTopicId ? [prevTopicId] : [],
+          }),
+        });
+        const created = (await res.json()) as { id?: string; error?: string; details?: { message?: string }[] };
+        if (!res.ok || !created.id) {
+          throw new Error(created.details?.[0]?.message || created.error || `Échec de la création du thème « ${t.name} ».`);
+        }
+        const newTopicId: string = created.id;
+        topicTargets.push({ id: newTopicId, name: t.name, topic: t });
+        prevTopicId = newTopicId;
+        addLog(`Thème créé : « ${t.name} » (${t.estimatedWeeks} sem.).`);
+      }
+
+      // 3. Génération séquentielle par thème (tranches d'extraits distinctes)
+      for (const target of topicTargets) {
+        addLog(`Génération des leçons — « ${target.name} » (extraits ${target.topic.chunkStart} à ${target.topic.chunkEnd})…`);
+        const fd = new FormData();
+        if (file) fd.append('file', file as File);
+        else fd.append('rawText', '');
+        fd.append('title', title.trim());
+        fd.append('author', author.trim() || 'Auteur Inconnu');
+        fd.append('domainId', domainId);
+        fd.append('topicId', target.id);
+        fd.append('chunkStart', String(target.topic.chunkStart));
+        fd.append('chunkEnd', String(target.topic.chunkEnd));
+        if (apiKey) fd.append('apiKey', apiKey);
+
+        const res = await fetch('/api/admin/ingest-pdf', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erreur d'ingestion");
+
+        if (data.jobId) {
+          const job = await pollJob(data.jobId);
+          if (job.status === 'ERROR') {
+            addLog(`« ${target.name} » : échec — ${job.message || 'erreur de génération.'}`, 'error');
+          } else {
+            addLog(
+              `« ${target.name} » terminé : ${job.lessonsCreated} leçon(s), ${job.questionsCreated} question(s).`,
+              'success'
+            );
           }
-          done = job.status === 'DONE' || job.status === 'ERROR';
+        } else {
+          addLog(`« ${target.name} » : ${data.message || 'livre enregistré.'}`, 'success');
         }
       }
+
+      addLog('Import terminé. Les cours sont disponibles dans /learn.', 'success');
+      setPhase('idle');
       setFile(null);
-      setTitle('');
-      setAuthor('');
+      setAnalysis(null);
+      setReviewTopics([]);
+      refreshBooks();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors du traitement.';
-      setLog((l) => [...l, { t: stamp(), text: message, kind: 'error' }]);
-      done = true;
-    } finally {
-      setLoading(false);
+      addLog(err instanceof Error ? err.message : 'Erreur lors de la génération.', 'error');
+      setPhase('idle');
     }
   };
-
-  const currentDomainObj = domains.find((d) => d.id === selectedDomain);
-  const lastLine = log[log.length - 1];
-  const status = loading ? 'GÉNÉRATION EN COURS' : lastLine?.kind === 'success' ? 'GÉNÉRATION TERMINÉE' : 'EN ATTENTE DE FICHIER';
-  const statusColor = loading ? EMBER : lastLine?.kind === 'success' ? VERDANT : D.text4;
-
-  const [books, setBooks] = useState<BookRow[]>([]);
-
-  interface BookRow {
-    id: string;
-    title: string;
-    author: string;
-    addedAt: string;
-    lessonsCount: number;
-    topics: string[];
-  }
-
-  const refreshBooks = () => {
-    fetch('/api/admin/books')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.books) setBooks(data.books);
-      });
-  };
-
-  useEffect(() => {
-    refreshBooks();
-  }, []);
 
   const handleDeleteBook = async (book: BookRow) => {
     const msg =
@@ -187,12 +342,30 @@ export default function AdminLibraryPage() {
     if (!window.confirm(msg)) return;
     try {
       await fetch(`/api/admin/books/${book.id}?deleteLessons=${book.lessonsCount > 0}`, { method: 'DELETE' });
-      setLog((l) => [...l, { t: stamp(), text: `Livre supprimé — ${book.title}.`, kind: 'success' }]);
+      addLog(`Livre supprimé — ${book.title}.`, 'success');
       refreshBooks();
     } catch {
-      setLog((l) => [...l, { t: stamp(), text: 'Erreur lors de la suppression.', kind: 'error' }]);
+      addLog('Erreur lors de la suppression.', 'error');
     }
   };
+
+  const busy = phase === 'analyzing' || phase === 'launching';
+  const lastLine = log[log.length - 1];
+  const statusLabel =
+    phase === 'analyzing'
+      ? 'ANALYSE DU DOCUMENT'
+      : phase === 'launching'
+        ? 'GÉNÉRATION EN COURS'
+        : phase === 'review'
+          ? 'VALIDATION REQUISE'
+          : lastLine?.kind === 'success'
+            ? 'TERMINÉ'
+            : 'EN ATTENTE DE FICHIER';
+  const statusColor =
+    phase === 'analyzing' || phase === 'launching' ? EMBER : phase === 'review' ? EMBER : lastLine?.kind === 'success' ? VERDANT : D.text4;
+
+  const updateTopic = (i: number, patch: Partial<ReviewTopic>) =>
+    setReviewTopics((prev) => prev.map((t, ti) => (ti === i ? { ...t, ...patch } : t)));
 
   return (
     <div style={{ padding: '30px 34px 70px', maxWidth: 1180 }}>
@@ -206,97 +379,154 @@ export default function AdminLibraryPage() {
           >
             EXPORTER LE CATALOGUE
           </a>
-          <span style={{ fontSize: 10, color: D.text3, letterSpacing: '0.1em' }}>PDF OU TEXTE</span>
+          <span style={{ fontSize: 10, color: D.text3, letterSpacing: '0.1em' }}>IMPORT AUTOMATIQUE</span>
         </div>
       </div>
 
-      <form onSubmit={handleUpload} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: 26, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: 26, alignItems: 'start' }}>
+        {/* Colonne gauche : dépôt + validation */}
         <div>
-          <div style={{ position: 'relative', border: `1px dashed ${D.border3}`, background: D.panel2, padding: '44px 30px', textAlign: 'center', marginBottom: 20 }}>
+          <div style={{ position: 'relative', border: `1px dashed ${phase === 'review' ? D.border2 : D.border3}`, background: D.panel2, padding: '44px 30px', textAlign: 'center', marginBottom: 20 }}>
             <input
               type="file"
               accept=".pdf,.txt"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  setFile(e.target.files[0]);
-                  if (!title) setTitle(e.target.files[0].name.replace(/\.[^/.]+$/, ''));
-                }
-              }}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+              onChange={(e) => e.target.files?.[0] && handleFileSelected(e.target.files[0])}
+              disabled={busy}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: busy ? 'default' : 'pointer' }}
             />
             <div style={{ width: 16, height: 16, border: `2px solid ${EMBER}`, margin: '0 auto 16px' }} />
             <div style={{ fontSize: 13, marginBottom: 7 }}>{file ? file.name : 'Déposer un livre de référence'}</div>
-            <div style={{ fontSize: 11, color: D.text3 }}>Glisser un fichier ici, ou cliquer pour parcourir</div>
+            <div style={{ fontSize: 11, color: D.text3 }}>L&apos;IA analysera titre, auteur, domaine et thèmes</div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 22px', border: `1px solid ${D.border}`, padding: 20 }}>
-            <div>
-              <div style={labelStyle}>TITRE</div>
-              <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Réseaux" />
+          {phase === 'idle' && file && (
+            <button
+              onClick={handleAnalyze}
+              style={{
+                all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'block', width: '100%',
+                background: EMBER, color: 'oklch(0.98 0.005 85)', fontSize: 11, letterSpacing: '0.14em',
+                padding: '14px 26px', textAlign: 'center', marginBottom: 20,
+              }}
+            >
+              ANALYSER LE DOCUMENT
+            </button>
+          )}
+
+          {phase === 'review' && analysis && (
+            <div style={{ border: `1px solid ${EMBER}`, padding: 20, marginBottom: 20 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.18em', color: EMBER, marginBottom: 16 }}>PROPOSITION DE L&apos;IA — À VALIDER</div>
+
+              {analysis.summary && (
+                <div style={{ fontSize: 11, lineHeight: 1.7, color: D.text2, marginBottom: 16, fontStyle: 'italic' }}>{analysis.summary}</div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginBottom: 16 }}>
+                <div>
+                  <div style={labelStyle}>TITRE DÉTECTÉ</div>
+                  <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} />
+                </div>
+                <div>
+                  <div style={labelStyle}>AUTEUR DÉTECTÉ</div>
+                  <input style={inputStyle} value={author} onChange={(e) => setAuthor(e.target.value)} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={labelStyle}>DOMAINE</div>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={domainChoice} onChange={(e) => setDomainChoice(e.target.value)}>
+                  {analysis.newDomain && <option value="new">+ Créer un nouveau domaine : {analysis.newDomain.name}</option>}
+                  {domains.map((d) => (
+                    <option key={d.id} value={`existing:${d.id}`}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {domainChoice === 'new' && analysis.newDomain && (
+                <div style={{ border: `1px solid ${D.border}`, padding: 14, marginBottom: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 14, marginBottom: 10 }}>
+                    <div>
+                      <div style={labelStyle}>NOM DU NOUVEAU DOMAINE</div>
+                      <input style={inputStyle} value={newDomain.name} onChange={(e) => setNewDomain({ ...newDomain, name: e.target.value })} />
+                    </div>
+                    <div>
+                      <div style={labelStyle}>COULEUR</div>
+                      <input type="color" value={newDomain.color} onChange={(e) => setNewDomain({ ...newDomain, color: e.target.value })} style={{ width: '100%', height: 30, background: 'transparent', border: `1px solid ${D.border3}`, cursor: 'pointer' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={labelStyle}>DESCRIPTION</div>
+                    <input style={inputStyle} value={newDomain.description} onChange={(e) => setNewDomain({ ...newDomain, description: e.target.value })} />
+                  </div>
+                </div>
+              )}
+
+              <div style={labelStyle}>THÈMES DÉTECTÉS ({totalChunks} extraits analysés)</div>
+              {reviewTopics.map((t, i) => (
+                <div key={`${t.slug}-${i}`} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 70px 70px 110px', gap: 10, alignItems: 'center', padding: '9px 0', borderTop: `1px solid ${D.border}` }}>
+                  <input type="checkbox" checked={t.include} onChange={(e) => updateTopic(i, { include: e.target.checked })} style={{ accentColor: EMBER }} title="Inclure ce thème" />
+                  <div style={{ minWidth: 0 }}>
+                    <input style={{ ...inputStyle, fontSize: 12 }} value={t.name} onChange={(e) => updateTopic(i, { name: e.target.value })} />
+                    <div style={{ fontSize: 9, color: D.text4, marginTop: 4 }}>{t.description}</div>
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    value={t.estimatedWeeks}
+                    onChange={(e) => updateTopic(i, { estimatedWeeks: Math.max(1, parseInt(e.target.value) || 1) })}
+                    title="Semaines estimées"
+                    style={{ ...inputStyle, textAlign: 'center' }}
+                  />
+                  <select value={t.maxDifficultyLevel} onChange={(e) => updateTopic(i, { maxDifficultyLevel: parseInt(e.target.value) })} style={{ ...inputStyle, cursor: 'pointer' }} title="Difficulté max">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>N{n}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 9, color: D.text3, textAlign: 'right' }}>
+                    extraits {t.chunkStart}–{t.chunkEnd}
+                  </div>
+                </div>
+              ))}
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                <input type="checkbox" checked={chainPrereqs} onChange={(e) => setChainPrereqs(e.target.checked)} style={{ accentColor: EMBER }} />
+                <span style={{ fontSize: 10, color: D.text2 }}>Chaîne de prérequis entre les thèmes (dans l&apos;ordre du livre)</span>
+              </label>
+
+              <div style={{ marginTop: 18 }}>
+                <button
+                  onClick={handleLaunch}
+                  style={{
+                    all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'block', width: '100%',
+                    background: EMBER, color: 'oklch(0.98 0.005 85)', fontSize: 11, letterSpacing: '0.14em',
+                    padding: '14px 26px', textAlign: 'center',
+                  }}
+                >
+                  VALIDER ET LANCER LA GÉNÉRATION ({reviewTopics.filter((t) => t.include).length} THÈME{reviewTopics.filter((t) => t.include).length > 1 ? 'S' : ''})
+                </button>
+              </div>
             </div>
-            <div>
-              <div style={labelStyle}>AUTEUR</div>
-              <input style={inputStyle} value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Andrew S. Tanenbaum" />
+          )}
+
+          {!phase.startsWith('rev') && !busy && !file && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, border: `1px solid ${D.border}`, padding: 20, marginBottom: 20 }}>
+              <div>
+                <div style={labelStyle}>CLÉ IA OPTIONNELLE</div>
+                <input style={inputStyle} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="laisser vide pour utiliser la clé du serveur" />
+              </div>
             </div>
-            <div>
-              <div style={labelStyle}>DOMAINE CIBLE</div>
-              <select style={{ ...inputStyle, cursor: 'pointer' }} value={selectedDomain} onChange={handleDomainChange}>
-                {domains.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div style={labelStyle}>THÈME CIBLE</div>
-              <select style={{ ...inputStyle, cursor: 'pointer' }} value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)}>
-                {currentDomainObj?.topics?.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={labelStyle}>CLÉ D&rsquo;ACCÈS AU SERVICE IA (OPTIONNELLE)</div>
-              <input
-                style={inputStyle}
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="laisser vide pour utiliser la clé du serveur"
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 18, marginTop: 4 }}>
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  all: 'unset',
-                  boxSizing: 'border-box',
-                  cursor: loading ? 'default' : 'pointer',
-                  background: EMBER,
-                  color: 'oklch(0.98 0.005 85)',
-                  fontSize: 11,
-                  letterSpacing: '0.14em',
-                  padding: '13px 26px',
-                  opacity: loading ? 0.6 : 1,
-                }}
-              >
-                {loading ? 'GÉNÉRATION...' : 'LANCER LA GÉNÉRATION'}
-              </button>
-              <span style={{ fontSize: 10, color: D.text3, lineHeight: 1.6, maxWidth: '38ch' }}>
-                Les leçons citent la source (page et chapitre) quand une clé IA est fournie.
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
+        {/* Colonne droite : journal */}
         <div style={{ border: `1px solid ${D.border}`, background: D.panel2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '13px 16px', borderBottom: `1px solid ${D.border}` }}>
-            <div style={{ width: 8, height: 8, background: statusColor }} />
-            <span style={{ fontSize: 10, letterSpacing: '0.16em' }}>{status}</span>
+            {(phase === 'analyzing' || phase === 'launching') && (
+              <div style={{ width: 8, height: 8, background: statusColor, animation: 'sf-pulse 1.2s ease-in-out infinite' }} />
+            )}
+            {!(phase === 'analyzing' || phase === 'launching') && <div style={{ width: 8, height: 8, background: statusColor }} />}
+            <span style={{ fontSize: 10, letterSpacing: '0.16em' }}>{statusLabel}</span>
           </div>
           <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 9, minHeight: 280 }}>
             {log.map((l, i) => (
@@ -315,8 +545,9 @@ export default function AdminLibraryPage() {
             ))}
           </div>
         </div>
-      </form>
+      </div>
 
+      {/* Bibliothèque */}
       <div style={{ marginTop: 40 }}>
         <div style={{ fontSize: 10, letterSpacing: '0.18em', color: D.text3, marginBottom: 16 }}>
           BIBLIOTHÈQUE ({books.length} OUVRAGE{books.length > 1 ? 'S' : ''})
@@ -343,14 +574,8 @@ export default function AdminLibraryPage() {
             <button
               onClick={() => handleDeleteBook(book)}
               style={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                cursor: 'pointer',
-                fontSize: 9,
-                letterSpacing: '0.12em',
-                color: 'oklch(0.62 0.13 30)',
-                border: `1px solid oklch(0.62 0.13 30 / 0.4)`,
-                padding: '6px 11px',
+                all: 'unset', boxSizing: 'border-box', cursor: 'pointer', fontSize: 9, letterSpacing: '0.12em',
+                color: 'oklch(0.62 0.13 30)', border: `1px solid oklch(0.62 0.13 30 / 0.4)`, padding: '6px 11px',
               }}
             >
               SUPPRIMER
