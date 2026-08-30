@@ -290,6 +290,22 @@ export const Header = () => {
         <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
           {mounted ? userProfile?.name || 'Apprenant' : 'Apprenant'}
         </span>
+        <button
+          onClick={() => fetch('/api/auth/logout', { method: 'POST' }).finally(() => (window.location.href = '/login'))}
+          title="Déconnexion"
+          style={{
+            all: 'unset',
+            boxSizing: 'border-box',
+            cursor: 'pointer',
+            fontSize: 9,
+            letterSpacing: '0.12em',
+            color: L.ink3,
+            border: `1px solid ${L.ruleFaint}`,
+            padding: '5px 8px',
+          }}
+        >
+          SORTIR
+        </button>
       </div>
     </header>
   );

@@ -38,6 +38,10 @@ npm run electron    # terminal 2 — fenêtre desktop
 
 Renseignez `GEMINI_API_KEY` dans `.env` (ou saisissez une clé directement dans l'écran d'import) pour activer l'analyse automatique de livres PDF : détection du titre/auteur/domaine, découpage en thèmes pédagogiques progressifs, puis génération des leçons et questions de quiz. Sans clé, l'import PDF ajoute seulement la référence du livre en base, sans génération.
 
+## Déploiement public — protection par mot de passe
+
+SkillForge n'a **aucun système de comptes** (profil unique, `DEFAULT_USER_ID` codé en dur). Avant de déployer sur une URL accessible publiquement, définissez `APP_PASSWORD` (et idéalement `AUTH_SECRET`, voir `.env.example`) : un écran `/login` protège alors toute l'app, y compris chaque route API — sans ça, n'importe qui trouvant l'URL peut utiliser le panneau admin (import PDF, consommant votre quota `GEMINI_API_KEY`) et modifier/supprimer tout le contenu. En local sans `APP_PASSWORD`, l'app reste ouverte sans friction.
+
 ## Structure
 
 - `src/app/(app)` — espace apprenant (tableau de bord, atelier, bibliothèque, horaires, statistiques, révision)

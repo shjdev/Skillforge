@@ -71,6 +71,22 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
         {isAdmin && (
           <span style={{ fontSize: 9, letterSpacing: '0.14em', color: D.text3 }}>SYNTHÈSE ADMIN</span>
         )}
+        <button
+          onClick={() => fetch('/api/auth/logout', { method: 'POST' }).finally(() => (window.location.href = '/login'))}
+          style={{
+            all: 'unset',
+            boxSizing: 'border-box',
+            cursor: 'pointer',
+            fontSize: 9,
+            letterSpacing: '0.12em',
+            color: isAdmin ? D.text3 : L.ink3,
+            border: `1px solid ${isAdmin ? D.border3 : L.ruleFaint}`,
+            padding: '5px 8px',
+            marginLeft: 10,
+          }}
+        >
+          SORTIR
+        </button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, paddingBottom: isAdmin ? 24 : 84 }}>{children}</div>
