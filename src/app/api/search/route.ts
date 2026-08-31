@@ -12,9 +12,9 @@ export async function GET(request: Request) {
     const lessons = await prisma.lesson.findMany({
       where: {
         OR: [
-          { title: { contains: q } },
-          { contentMd: { contains: q } },
-          { keyConcepts: { contains: q } },
+          { title: { contains: q, mode: 'insensitive' } },
+          { contentMd: { contains: q, mode: 'insensitive' } },
+          { keyConcepts: { contains: q, mode: 'insensitive' } },
         ],
       },
       include: {

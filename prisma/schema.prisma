@@ -1,12 +1,16 @@
-// Prisma Schema for SkillForge (SQLite Local Database)
+// Prisma Schema for SkillForge (PostgreSQL — Neon)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./skillforge.db"
+  provider  = "postgresql"
+  // Pooled connection (Neon's PgBouncer-compatible endpoint) — used at runtime.
+  url       = env("DATABASE_URL")
+  // Direct (unpooled) connection — used by `prisma db push`/`migrate` for DDL,
+  // which doesn't play well with transaction-mode pooling.
+  directUrl = env("DIRECT_URL")
 }
 
 model UserProfile {

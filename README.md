@@ -1,16 +1,20 @@
 # SkillForge
 
-Application d'apprentissage quotidien structuré — leçons, quiz de validation, révision espacée et suivi de progression — construite avec Next.js 16, Prisma/SQLite et Zustand. L'interface s'adapte automatiquement (responsive) entre une mise en page desktop et une mise en page mobile dédiée selon la largeur d'écran.
+Application d'apprentissage quotidien structuré — leçons, quiz de validation, révision espacée et suivi de progression — construite avec Next.js 16, Prisma/PostgreSQL (Neon) et Zustand. L'interface s'adapte automatiquement (responsive) entre une mise en page desktop et une mise en page mobile dédiée selon la largeur d'écran.
 
 ## Démarrage
 
+Nécessite une base [Neon](https://neon.tech) (gratuite) — créez un projet, récupérez les deux chaînes de connexion depuis Dashboard > Connect (l'une avec `-pooler` dans l'hôte pour `DATABASE_URL`, l'autre sans pour `DIRECT_URL`).
+
 ```bash
 npm install
-cp .env.example .env      # optionnel — voir .env.example pour GEMINI_API_KEY
-npm run db:push           # crée la base SQLite locale (prisma/skillforge.db)
+cp .env.example .env      # requis — DATABASE_URL et DIRECT_URL (Neon)
+npm run db:push           # crée les tables sur la base Neon
 npm run db:seed           # données de démonstration (domaines, thèmes, leçons)
 npm run dev
 ```
+
+En développement local, le plus simple est de créer une [branche Neon](https://neon.tech/docs/introduction/branching) dédiée (isolée de la production) plutôt qu'une base séparée.
 
 Ouvrez [http://localhost:3000](http://localhost:3000). Réduisez la fenêtre du navigateur (ou ouvrez depuis un téléphone) pour voir la mise en page mobile — le contenu bascule en direct selon la largeur d'écran, sans redirection ni bouton.
 
@@ -48,4 +52,4 @@ SkillForge n'a **aucun système de comptes** (profil unique, `DEFAULT_USER_ID` c
 - `src/app/admin` — console d'administration (import de contenu, gestion des cours/quiz/utilisateurs)
 - `src/components/mobile` — écrans et coquille de la mise en page mobile, montés directement dans les mêmes routes que la version desktop via `useIsMobile()`
 - `src/lib/ingestion.ts` — extraction PDF et découpage de texte, partagés entre l'analyse et la génération
-- `prisma/schema.prisma` — modèle de données (domaines, thèmes, leçons, quiz, progression, notifications…)
+- `prisma/schema.prisma` — modèle de données PostgreSQL (domaines, thèmes, leçons, quiz, progression, notifications…)
