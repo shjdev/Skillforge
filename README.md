@@ -42,6 +42,15 @@ npm run electron    # terminal 2 — fenêtre desktop
 
 Renseignez `GEMINI_API_KEY` dans `.env` (ou saisissez une clé directement dans l'écran d'import) pour activer l'analyse automatique de livres PDF : détection du titre/auteur/domaine, découpage en thèmes pédagogiques progressifs, puis génération des leçons et questions de quiz. Sans clé, l'import PDF ajoute seulement la référence du livre en base, sans génération.
 
+## Déploiement (Vercel)
+
+1. Importez le dépôt sur [vercel.com/new](https://vercel.com/new) — Next.js est détecté automatiquement, aucune config supplémentaire n'est nécessaire (`vercel.json` inutile).
+2. Dans Project Settings > Environment Variables, ajoutez : `DATABASE_URL`, `DIRECT_URL` (Neon — une base **de production** séparée de votre branche de dev conseillée), `GEMINI_API_KEY` (optionnel), `APP_PASSWORD` et `AUTH_SECRET` (voir ci-dessous, fortement recommandé dès que l'URL est publique).
+3. Déployez. Le build exécute `prisma generate` automatiquement via le script `postinstall`.
+4. Une fois le déploiement en ligne, lancez `npm run db:push` puis `npm run db:seed` **en local** avec le `.env` pointant vers la base Neon de production (le déploiement Vercel ne crée pas les tables tout seul).
+
+`src/proxy.ts` (le garde-fou mot de passe) tourne nativement sur l'infrastructure Vercel — c'est littéralement la plateforme pour laquelle cette fonctionnalité Next.js est pensée, aucun réglage particulier à faire.
+
 ## Déploiement public — protection par mot de passe
 
 SkillForge n'a **aucun système de comptes** (profil unique, `DEFAULT_USER_ID` codé en dur). Avant de déployer sur une URL accessible publiquement, définissez `APP_PASSWORD` (et idéalement `AUTH_SECRET`, voir `.env.example`) : un écran `/login` protège alors toute l'app, y compris chaque route API — sans ça, n'importe qui trouvant l'URL peut utiliser le panneau admin (import PDF, consommant votre quota `GEMINI_API_KEY`) et modifier/supprimer tout le contenu. En local sans `APP_PASSWORD`, l'app reste ouverte sans friction.
