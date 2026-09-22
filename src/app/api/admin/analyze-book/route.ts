@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
-import { chunkText, extractPdfText, slugify, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
+import { chunkText, extractPdfText, fetchBlobBuffer, slugify, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
 
 const ANALYSIS_MODEL = 'gemini-3.6-flash';
+
+// Le texte extrait peut nécessiter plusieurs appels Gemini synchrones ; on
+// dépasse le délai par défaut des fonctions serverless pour laisser le temps
+// aux gros ouvrages (téléversés via Blob, donc non limités à 4,5 Mo côté
+// requête) d'être traités.
+export const maxDuration = 60;
 
 interface AnalysisTopic {
   name: string;
@@ -120,6 +126,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const fileUrl = formData.get('fileUrl') as string | null;
     const apiKey = (formData.get('apiKey') as string) || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -129,8 +136,8 @@ export async function POST(request: Request) {
     }
 
     let text = '';
-    if (file) {
-      const buffer = Buffer.from(await file.arrayBuffer());
+    if (file || fileUrl) {
+      const buffer = file ? Buffer.from(await file.arrayBuffer()) : await fetchBlobBuffer(fileUrl as string);
       text = await extractPdfText(buffer);
       if (!text.trim()) {
         return NextResponse.json(

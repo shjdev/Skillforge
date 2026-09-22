@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { toErrorMessage } from '@/lib/errors';
 import { L, EMBER, VERDANT } from '@/lib/theme';
 import MobileHoraires from '@/components/mobile/screens/Horaires';
 
@@ -43,11 +44,13 @@ function ScheduleForm({ profile }: { profile: ProfileData }) {
   const [catchUp, setCatchUp] = useState(profile.notificationSettings?.accumulationReminder ?? true);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const isDouble = mode === 'TWO_SESSIONS';
 
   const handleSave = async () => {
     setSaving(true);
+    setErrorMsg('');
     try {
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -80,7 +83,7 @@ function ScheduleForm({ profile }: { profile: ProfileData }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
     } catch (err) {
-      console.error('Failed to save schedule settings:', err);
+      setErrorMsg(toErrorMessage(err, "Échec de l'enregistrement."));
     } finally {
       setSaving(false);
     }
@@ -221,6 +224,12 @@ function ScheduleForm({ profile }: { profile: ProfileData }) {
         >
           {saving ? 'ENREGISTREMENT...' : 'ENREGISTRER'}
         </button>
+        {errorMsg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 8, height: 8, background: 'oklch(0.62 0.13 30)' }} />
+            <span style={{ fontSize: 11, color: L.ink2 }}>{errorMsg}</span>
+          </div>
+        )}
         {saved && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 8, height: 8, background: VERDANT }} />

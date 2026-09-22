@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
-import { chunkText, extractPdfText, BASE_CHUNKS, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
+import { chunkText, extractPdfText, fetchBlobBuffer, BASE_CHUNKS, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
+
+// Cf. analyze-book/route.ts : les gros ouvrages arrivent via une URL Blob
+// (non limitée à 4,5 Mo) et l'extraction + le découpage peuvent prendre du
+// temps avant que le job d'arrière-plan ne démarre.
+export const maxDuration = 60;
 
 const MIN_CHUNKS = 6;
 const MAX_CHUNKS = 15;
@@ -361,6 +366,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const fileUrl = formData.get('fileUrl') as string | null;
     const title = (formData.get('title') as string) || 'Livre sans titre';
     const author = (formData.get('author') as string) || 'Auteur inconnu';
     const domainId = formData.get('domainId') as string;
@@ -392,8 +398,8 @@ export async function POST(request: Request) {
     }
 
     let extractedText = '';
-    if (file) {
-      const buffer = Buffer.from(await file.arrayBuffer());
+    if (file || fileUrl) {
+      const buffer = file ? Buffer.from(await file.arrayBuffer()) : await fetchBlobBuffer(fileUrl as string);
       extractedText = await extractPdfText(buffer);
       if (!extractedText.trim()) {
         return NextResponse.json(

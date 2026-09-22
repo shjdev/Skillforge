@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { L, EMBER, VERDANT } from '@/lib/theme';
 import { useAppStore, type UserProfileState } from '@/stores/useAppStore';
 import { todayKey } from '@/hooks/useNotificationScheduler';
+import { toErrorMessage } from '@/lib/errors';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { LessonProse } from '@/components/learn/LessonProse';
 import { TestFlow } from '@/components/learn/TestFlow';
@@ -68,6 +69,7 @@ function LearnContent() {
 
   const [tab, setTab] = useState<'lesson' | 'placement' | 'quiz'>('lesson');
   const [sessionNotes, setSessionNotes] = useState('');
+  const [mutationError, setMutationError] = useState('');
 
   const { data: domainData, isLoading: isLoadingDomain } = useQuery({
     queryKey: ['domain', domainSlug],

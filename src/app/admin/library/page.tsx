@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { upload } from '@vercel/blob/client';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT } from '@/lib/theme';
+import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
 import type { DomainSummary } from '@/types/models';
 import MobileAdmin from '@/components/mobile/screens/Admin';
 
@@ -68,6 +70,7 @@ export default function AdminLibraryPage() {
 function AdminLibraryDesktop() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [file, setFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
 
   // Résultat de l'analyse + état éditable de l'écran de validation
@@ -108,7 +111,18 @@ function AdminLibraryDesktop() {
       });
   }
 
+  const cleanupBlob = (url: string | null) => {
+    if (!url) return;
+    fetch('/api/admin/blob-upload', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).catch(() => {});
+  };
+
   const handleFileSelected = (f: File) => {
+    cleanupBlob(fileUrl);
+    setFileUrl(null);
     setFile(f);
     setPhase('idle');
     setAnalysis(null);
@@ -120,12 +134,21 @@ function AdminLibraryDesktop() {
     setPhase('analyzing');
     setLog([{ t: stamp(), text: `Analyse du document — ${file.name}…`, kind: 'info' }]);
     try {
+      // Téléversement direct navigateur → Blob : contourne la limite de
+      // ~4,5 Mo par requête des fonctions serverless Vercel.
+      let url = fileUrl;
+      if (!url) {
+        addLog('Téléversement du fichier…');
+        const blob = await upload(file.name, file, { access: 'public', handleUploadUrl: '/api/admin/blob-upload' });
+        url = blob.url;
+        setFileUrl(url);
+      }
+
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('fileUrl', url);
       if (apiKey) fd.append('apiKey', apiKey);
       const res = await fetch('/api/admin/analyze-book', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Échec de l'analyse");
+      const data = await parseJsonResponse<{ analysis: BookAnalysis; totalChunks: number }>(res, "Échec de l'analyse");
       const a: BookAnalysis = data.analysis;
 
       if (!a.isTeachable) {
@@ -148,7 +171,7 @@ function AdminLibraryDesktop() {
       );
       setPhase('review');
     } catch (err) {
-      addLog(err instanceof Error ? err.message : "Erreur lors de l'analyse.", 'error');
+      addLog(toErrorMessage(err, "Erreur lors de l'analyse."), 'error');
       setPhase('idle');
     }
   };
@@ -293,7 +316,7 @@ function AdminLibraryDesktop() {
       for (const target of topicTargets) {
         addLog(`Génération des leçons — « ${target.name} » (extraits ${target.topic.chunkStart} à ${target.topic.chunkEnd})…`);
         const fd = new FormData();
-        if (file) fd.append('file', file as File);
+        if (fileUrl) fd.append('fileUrl', fileUrl);
         else fd.append('rawText', '');
         fd.append('title', title.trim());
         fd.append('author', author.trim() || 'Auteur Inconnu');
@@ -304,8 +327,7 @@ function AdminLibraryDesktop() {
         if (apiKey) fd.append('apiKey', apiKey);
 
         const res = await fetch('/api/admin/ingest-pdf', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erreur d'ingestion");
+        const data = await parseJsonResponse<{ jobId?: string; message?: string }>(res, "Erreur d'ingestion");
 
         if (data.jobId) {
           const job = await pollJob(data.jobId);
@@ -323,13 +345,15 @@ function AdminLibraryDesktop() {
       }
 
       addLog('Import terminé. Les cours sont disponibles dans /learn.', 'success');
+      cleanupBlob(fileUrl);
       setPhase('idle');
       setFile(null);
+      setFileUrl(null);
       setAnalysis(null);
       setReviewTopics([]);
       refreshBooks();
     } catch (err) {
-      addLog(err instanceof Error ? err.message : 'Erreur lors de la génération.', 'error');
+      addLog(toErrorMessage(err, 'Erreur lors de la génération.'), 'error');
       setPhase('idle');
     }
   };

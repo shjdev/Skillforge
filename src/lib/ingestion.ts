@@ -45,6 +45,17 @@ export async function extractPdfText(buffer: Buffer): Promise<string> {
   }
 }
 
+/**
+ * Downloads a file previously uploaded straight from the browser to Vercel
+ * Blob (bypassing the ~4.5 MB request body limit of a Vercel serverless
+ * function) so it can be processed here exactly like a directly-posted file.
+ */
+export async function fetchBlobBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Fichier introuvable à l'URL fournie (lien expiré ou supprimé ?).");
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export function slugify(input: string): string {
   return input
     .toLowerCase()

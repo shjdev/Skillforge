@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { toErrorMessage } from '@/lib/errors';
 import { EMBER, VERDANT, L, FONT_SERIF } from '@/lib/theme';
 import { MSkeleton } from '@/components/mobile/kit';
 
@@ -24,6 +25,7 @@ export default function MobileHoraires() {
   const [single, setSingle] = useState('19:00');
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     fetch('/api/profile')
@@ -61,6 +63,7 @@ export default function MobileHoraires() {
 
   const handleSave = async () => {
     setSaving(true);
+    setErrorMsg('');
     try {
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -90,8 +93,8 @@ export default function MobileHoraires() {
       });
       setSavedMsg(`Enregistré · rappels à ${isDouble ? `${t1} et ${t2}` : single}`);
       setTimeout(() => setSavedMsg(''), 4000);
-    } catch {
-      /* silencieux */
+    } catch (err) {
+      setErrorMsg(toErrorMessage(err, "Échec de l'enregistrement."));
     } finally {
       setSaving(false);
     }
@@ -189,6 +192,12 @@ export default function MobileHoraires() {
       >
         {saving ? 'ENREGISTREMENT…' : 'ENREGISTRER'}
       </button>
+      {errorMsg && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14 }}>
+          <div style={{ width: 8, height: 8, background: 'oklch(0.62 0.13 30)', marginTop: 5, flex: '0 0 auto' }} />
+          <span style={{ fontSize: 11, color: L.ink2, lineHeight: 1.6 }}>{errorMsg}</span>
+        </div>
+      )}
       {savedMsg && (
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14 }}>
           <div style={{ width: 8, height: 8, background: VERDANT, marginTop: 5, flex: '0 0 auto' }} />

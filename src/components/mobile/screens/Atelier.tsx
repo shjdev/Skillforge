@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/stores/useAppStore';
+import { toErrorMessage } from '@/lib/errors';
 import { EMBER, VERDANT, L, FONT_SERIF } from '@/lib/theme';
 import { LessonProse } from '@/components/learn/LessonProse';
 import { MSkeleton, Ticks } from '@/components/mobile/kit';
@@ -32,6 +33,7 @@ function AtelierContent() {
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [validated, setValidated] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   // Quiz local state
   const [qi, setQi] = useState(0);
@@ -135,6 +137,7 @@ function AtelierContent() {
   const handleValidate = async () => {
     if (!detail?.activeLesson || validating) return;
     setValidating(true);
+    setActionError('');
     try {
       const res = await fetch('/api/sessions/complete', {
         method: 'POST',
@@ -155,8 +158,8 @@ function AtelierContent() {
         const fd: TopicDetailResponse = await fresh.json();
         setDetail(fd);
       }
-    } catch {
-      /* silencieux */
+    } catch (err) {
+      setActionError(toErrorMessage(err, "Échec de l'enregistrement."));
     } finally {
       setValidating(false);
     }
@@ -169,6 +172,7 @@ function AtelierContent() {
   const submitQuiz = async () => {
     if (!quiz || submitting) return;
     setSubmitting(true);
+    setActionError('');
     try {
       const res = await fetch(`/api/quiz/${quiz.id}/submit`, {
         method: 'POST',
@@ -180,8 +184,8 @@ function AtelierContent() {
       setResult(data);
       setView('resultat');
       await refreshProfile();
-    } catch {
-      /* silencieux */
+    } catch (err) {
+      setActionError(toErrorMessage(err, "Échec de l'envoi du quiz."));
     } finally {
       setSubmitting(false);
     }
@@ -414,7 +418,9 @@ function AtelierContent() {
             display: 'flex', alignItems: 'center', gap: 12, zIndex: 45,
           }}
         >
-          <span style={{ fontSize: 11, color: L.ink3, flex: '0 1 auto' }}>{answered ? 'Réponse enregistrée' : 'Sélectionnez une réponse'}</span>
+          <span style={{ fontSize: 11, color: actionError ? 'oklch(0.62 0.13 30)' : L.ink3, flex: '0 1 auto' }}>
+            {actionError || (answered ? 'Réponse enregistrée' : 'Sélectionnez une réponse')}
+          </span>
           <div style={{ flex: 1 }} />
           <button
             disabled={!answered || submitting}
@@ -516,6 +522,9 @@ function AtelierContent() {
             borderTop: `1px solid ${L.rule}`, background: L.paper2, padding: '12px 16px 14px', zIndex: 45,
           }}
         >
+          {actionError && (
+            <div style={{ fontSize: 11, color: 'oklch(0.62 0.13 30)', marginBottom: 10, textAlign: 'center' }}>{actionError}</div>
+          )}
           {!(validated && !detail?.activeLesson) && detail?.activeLesson ? (
             <button
               onClick={handleValidate}

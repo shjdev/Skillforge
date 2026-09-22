@@ -2,9 +2,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { upload } from '@vercel/blob/client';
 import { EMBER, VERDANT, D, FONT_SERIF, formatPoints } from '@/lib/theme';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMounted } from '@/hooks/useMounted';
+import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
 
 interface LogLine {
   t: string;
@@ -50,6 +52,7 @@ export default function MobileAdmin() {
   const [kpis, setKpis] = useState<{ label: string; value: string; sub: string }[]>([]);
   const [activity, setActivity] = useState<{ time: string; tag: string; text: string; val: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'confirm' | 'running'>('idle');
   const [log, setLog] = useState<LogLine[]>([
@@ -86,18 +89,38 @@ export default function MobileAdmin() {
   const addLog = (text: string, kind: LogLine['kind'] = 'info') => setLog((l) => [...l, { t: stamp(), text, kind }]);
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  const cleanupBlob = (url: string | null) => {
+    if (!url) return;
+    fetch('/api/admin/blob-upload', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).catch(() => {});
+  };
+
   const handleAnalyze = async (selected?: File) => {
     const f = selected || file;
     if (!f || busy) return;
+    const isNewFile = f !== file;
+    if (isNewFile) cleanupBlob(fileUrl);
     setFile(f);
     setPhase('analyzing');
     setLog([{ t: stamp(), text: `Analyse — ${f.name}…`, kind: 'info' }]);
     try {
+      // Téléversement direct navigateur → Blob : contourne la limite de
+      // ~4,5 Mo par requête des fonctions serverless Vercel.
+      let url = isNewFile ? null : fileUrl;
+      if (!url) {
+        addLog('Téléversement du fichier…');
+        const blob = await upload(f.name, f, { access: 'public', handleUploadUrl: '/api/admin/blob-upload' });
+        url = blob.url;
+        setFileUrl(url);
+      }
+
       const fd = new FormData();
-      fd.append('file', f);
+      fd.append('fileUrl', url);
       const res = await fetch('/api/admin/analyze-book', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await parseJsonResponse<{ analysis: Analysis }>(res, "Échec de l'analyse");
       const a: Analysis = data.analysis;
       if (!a.isTeachable) {
         addLog(`Document non enseignable : ${a.rejectionReason || 'inadapté.'}`, 'error');
@@ -108,7 +131,7 @@ export default function MobileAdmin() {
       addLog(`${a.topics.length} thème(s) détecté(s). Validez pour lancer la génération.`, 'success');
       setPhase('confirm');
     } catch (err) {
-      addLog(err instanceof Error ? err.message : "Erreur d'analyse.", 'error');
+      addLog(toErrorMessage(err, "Erreur d'analyse."), 'error');
       setPhase('idle');
     }
   };
@@ -185,7 +208,7 @@ export default function MobileAdmin() {
         if (!target.id) continue;
         addLog(`Génération — « ${target.name} » (extraits ${target.topic.chunkStart}–${target.topic.chunkEnd})…`);
         const fd = new FormData();
-        if (file) fd.append('file', file);
+        if (fileUrl) fd.append('fileUrl', fileUrl);
         fd.append('title', analysis.detectedTitle || file?.name.replace(/\.[^/.]+$/, '') || 'Livre');
         fd.append('author', analysis.detectedAuthor || 'Auteur Inconnu');
         fd.append('domainId', domainId);
@@ -193,8 +216,7 @@ export default function MobileAdmin() {
         fd.append('chunkStart', String(target.topic.chunkStart));
         fd.append('chunkEnd', String(target.topic.chunkEnd));
         const res = await fetch('/api/admin/ingest-pdf', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const data = await parseJsonResponse<{ jobId: string }>(res, "Erreur d'ingestion");
         const job = await pollJob(data.jobId);
         if (job.status === 'ERROR') {
           addLog(`« ${target.name} » : échec — ${job.message}`, 'error');
@@ -203,11 +225,13 @@ export default function MobileAdmin() {
         }
       }
       addLog('Import terminé.', 'success');
+      cleanupBlob(fileUrl);
       setPhase('idle');
       setAnalysis(null);
       setFile(null);
+      setFileUrl(null);
     } catch (err) {
-      addLog(err instanceof Error ? err.message : 'Erreur.', 'error');
+      addLog(toErrorMessage(err, 'Erreur.'), 'error');
       setPhase('idle');
     }
   };
