@@ -2,6 +2,8 @@
 // Used by both /api/admin/analyze-book (document analysis pass) and
 // /api/admin/ingest-pdf (lesson generation) so chunk boundaries stay identical.
 
+import { get } from '@vercel/blob';
+
 export const CHUNK_SIZE = 14_000;
 export const BASE_CHUNKS = 15;
 export const PLAN_OVERVIEW_CHARS = 900;
@@ -49,11 +51,25 @@ export async function extractPdfText(buffer: Buffer): Promise<string> {
  * Downloads a file previously uploaded straight from the browser to Vercel
  * Blob (bypassing the ~4.5 MB request body limit of a Vercel serverless
  * function) so it can be processed here exactly like a directly-posted file.
+ * The store is private, so the read goes through the SDK with the server's
+ * BLOB_READ_WRITE_TOKEN; only URLs on Vercel Blob hosts are accepted, so a
+ * client can't make the server fetch an arbitrary address.
  */
 export async function fetchBlobBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Fichier introuvable à l'URL fournie (lien expiré ou supprimé ?).");
-  return Buffer.from(await res.arrayBuffer());
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error('URL de fichier invalide.');
+  }
+  if (!host.endsWith('.blob.vercel-storage.com')) {
+    throw new Error("URL de fichier refusée : elle ne pointe pas vers le stockage Vercel Blob de l'application.");
+  }
+  const result = await get(url, { access: 'private', useCache: false });
+  if (!result || result.statusCode !== 200) {
+    throw new Error("Fichier introuvable à l'URL fournie (lien expiré ou supprimé ?).");
+  }
+  return Buffer.from(await new Response(result.stream).arrayBuffer());
 }
 
 export function slugify(input: string): string {

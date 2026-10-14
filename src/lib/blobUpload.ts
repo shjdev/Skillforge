@@ -8,13 +8,14 @@ const MULTIPART_THRESHOLD = 20 * 1024 * 1024;
 /**
  * Téléverse un livre directement du navigateur vers Vercel Blob (le fichier ne
  * transite jamais par une fonction serverless, limitée à ~4,5 Mo par requête)
+ * en accès privé (store privé : le serveur relit le fichier avec son token)
  * et renvoie son URL, à transmettre ensuite à analyze-book / ingest-pdf.
  * Les erreurs du SDK Blob sont traduites en messages lisibles.
  */
 export async function uploadBookFile(file: File): Promise<string> {
   try {
     const blob = await upload(file.name, file, {
-      access: 'public',
+      access: 'private',
       handleUploadUrl: '/api/admin/blob-upload',
       multipart: file.size > MULTIPART_THRESHOLD,
     });
@@ -52,7 +53,7 @@ export function describeBlobError(err: unknown, file: { size: number }): string 
     return "Stockage de fichiers non configuré sur le serveur : créez un Blob store dans l'onglet Storage du projet Vercel, reliez-le au projet puis redéployez.";
   }
   if (/private/i.test(message) && /public/i.test(message)) {
-    return "Le Blob store Vercel est configuré en accès privé alors que l'application attend un store public : recréez-le en accès public.";
+    return "Le Blob store Vercel est en accès public alors que l'application envoie les livres en accès privé : utilisez un store privé.";
   }
   if (/store.*(not found|suspended)/i.test(message)) {
     return `Blob store Vercel introuvable ou suspendu (quota dépassé ?). Détail : ${message}`;
