@@ -9,7 +9,7 @@ const ANALYSIS_MODEL = 'gemini-3.6-flash';
 // dépasse le délai par défaut des fonctions serverless pour laisser le temps
 // aux gros ouvrages (téléversés via Blob, donc non limités à 4,5 Mo côté
 // requête) d'être traités.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface AnalysisTopic {
   name: string;
@@ -170,6 +170,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ analysis, totalChunks: chunks.length });
   } catch (error) {
     console.error('Error analyzing book:', error);
-    return NextResponse.json({ error: "Échec de l'analyse du document." }, { status: 500 });
+    const detail = error instanceof Error && error.message ? ` (${error.message})` : '';
+    return NextResponse.json({ error: `Échec de l'analyse du document${detail}.` }, { status: 500 });
   }
 }

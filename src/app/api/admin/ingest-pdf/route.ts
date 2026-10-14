@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
 import { chunkText, extractPdfText, fetchBlobBuffer, BASE_CHUNKS, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
 
-// Cf. analyze-book/route.ts : les gros ouvrages arrivent via une URL Blob
-// (non limitée à 4,5 Mo) et l'extraction + le découpage peuvent prendre du
-// temps avant que le job d'arrière-plan ne démarre.
-export const maxDuration = 60;
+// Les gros ouvrages arrivent via une URL Blob (non limitée à 4,5 Mo), et la
+// génération qui suit enchaîne un appel Gemini par extrait dans `after()` :
+// celui-ci partage la durée max de la route, d'où le plafond Vercel (300 s).
+export const maxDuration = 300;
 
 const MIN_CHUNKS = 6;
 const MAX_CHUNKS = 15;
@@ -449,15 +449,17 @@ export async function POST(request: Request) {
       },
     });
 
-    // Traitement en arrière-plan : le client suit la progression via GET ?jobId=
-    processIngestJob(job.id, {
+    // Traitement en arrière-plan : le client suit la progression via GET ?jobId=.
+    // `after()` garde la fonction serverless en vie après l'envoi de la réponse ;
+    // une promesse non attendue serait gelée par Vercel dès la réponse partie.
+    after(() => processIngestJob(job.id, {
       topicId,
       title,
       author,
       apiKey,
       chunks,
       maxDifficultyLevel: topic.maxDifficultyLevel,
-    }).catch(() => {});
+    }));
 
     return NextResponse.json({ success: true, jobId: job.id, totalChunks: chunks.length });
   } catch (error) {

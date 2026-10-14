@@ -8,7 +8,22 @@ import { del } from '@vercel/blob';
  * body limit (see analyze-book / ingest-pdf, which read the file back from
  * the resulting Blob URL instead of a multipart `file` field).
  */
+const MISSING_TOKEN_ERROR =
+  "Stockage de fichiers non configuré (BLOB_READ_WRITE_TOKEN absent) : créez un Blob store dans l'onglet Storage du projet Vercel, reliez-le au projet puis redéployez.";
+
+// Diagnostic appelé par le client quand le SDK Blob ne renvoie que « Failed to
+// retrieve the client token » (il masque le message d'erreur du POST).
+export async function GET(): Promise<NextResponse> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json({ error: MISSING_TOKEN_ERROR }, { status: 500 });
+  }
+  return NextResponse.json({ configured: true });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json({ error: MISSING_TOKEN_ERROR }, { status: 500 });
+  }
   const body = (await request.json()) as HandleUploadBody;
 
   try {

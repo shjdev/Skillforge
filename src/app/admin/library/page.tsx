@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { upload } from '@vercel/blob/client';
+import { uploadBookFile } from '@/lib/blobUpload';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT } from '@/lib/theme';
 import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
@@ -139,8 +139,7 @@ function AdminLibraryDesktop() {
       let url = fileUrl;
       if (!url) {
         addLog('Téléversement du fichier…');
-        const blob = await upload(file.name, file, { access: 'public', handleUploadUrl: '/api/admin/blob-upload' });
-        url = blob.url;
+        url = await uploadBookFile(file);
         setFileUrl(url);
       }
 

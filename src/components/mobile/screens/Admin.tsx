@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { upload } from '@vercel/blob/client';
+import { uploadBookFile } from '@/lib/blobUpload';
 import { EMBER, VERDANT, D, FONT_SERIF, formatPoints } from '@/lib/theme';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMounted } from '@/hooks/useMounted';
@@ -112,8 +112,7 @@ export default function MobileAdmin() {
       let url = isNewFile ? null : fileUrl;
       if (!url) {
         addLog('Téléversement du fichier…');
-        const blob = await upload(f.name, f, { access: 'public', handleUploadUrl: '/api/admin/blob-upload' });
-        url = blob.url;
+        url = await uploadBookFile(f);
         setFileUrl(url);
       }
 
