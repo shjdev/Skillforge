@@ -10,6 +10,10 @@ function LoginContent() {
   const isAdminPrompt = params.get('admin') === '1';
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  // Première connexion d'un testeur : le serveur demande un mot de passe personnel.
+  const [needsNewPassword, setNeedsNewPassword] = useState(false);
   const [authEnabled, setAuthEnabled] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,21 +27,31 @@ function LoginContent() {
       .catch(() => {});
   }, []);
 
-  const canSubmit = !loading && (authEnabled ? !!password : !!name.trim() || true);
+  const canSubmit =
+    !loading && (authEnabled ? !!password && (!needsNewPassword || (!!newPassword && !!confirmPassword)) : true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    if (needsNewPassword && newPassword !== confirmPassword) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), password }),
+        body: JSON.stringify({
+          name: name.trim(),
+          password,
+          newPassword: needsNewPassword ? newPassword : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.needsPassword) setNeedsNewPassword(true);
         throw new Error(data.error || 'Mot de passe incorrect.');
       }
       window.location.href = next;
@@ -58,7 +72,9 @@ function LoginContent() {
         <div style={{ fontSize: 11, color: L.ink2, lineHeight: 1.6, marginBottom: 24 }}>
           {isAdminPrompt
             ? 'Accès administrateur requis. Saisissez le mot de passe administrateur.'
-            : 'Entrez votre prénom pour accéder à votre espace personnel (ou retrouver votre progression et vos livres importés).'}
+            : needsNewPassword
+              ? "Première connexion : choisissez un mot de passe personnel. C'est lui qui protégera votre espace, le code d'invitation ne suffira plus."
+              : "Entrez votre prénom et votre mot de passe. Première visite ? Utilisez le code d'invitation reçu."}
         </div>
 
         {!isAdminPrompt && (
@@ -67,9 +83,12 @@ function LoginContent() {
             <input
               type="text"
               autoFocus
-              placeholder="Ex. Lucas (vide = profil principal)"
+              placeholder="Ex. Lucas"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNeedsNewPassword(false);
+              }}
               style={{
                 all: 'unset',
                 boxSizing: 'border-box',
@@ -87,13 +106,55 @@ function LoginContent() {
         {authEnabled && (
           <>
             <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>
-              {isAdminPrompt ? 'MOT DE PASSE ADMIN' : "CODE D'ACCÈS"}
+              {isAdminPrompt ? 'MOT DE PASSE ADMIN' : needsNewPassword ? "CODE D'INVITATION" : "MOT DE PASSE / CODE D'INVITATION"}
             </div>
             <input
               type="password"
               autoFocus={isAdminPrompt}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              style={{
+                all: 'unset',
+                boxSizing: 'border-box',
+                width: '100%',
+                fontSize: 20,
+                borderBottom: `1px solid ${L.ink}`,
+                paddingBottom: 8,
+                marginBottom: 22,
+                cursor: 'text',
+              }}
+            />
+          </>
+        )}
+
+        {authEnabled && needsNewPassword && !isAdminPrompt && (
+          <>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>
+              NOUVEAU MOT DE PASSE PERSONNEL (8 CARACTÈRES MIN.)
+            </div>
+            <input
+              type="password"
+              autoFocus
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={{
+                all: 'unset',
+                boxSizing: 'border-box',
+                width: '100%',
+                fontSize: 20,
+                borderBottom: `1px solid ${L.ink}`,
+                paddingBottom: 8,
+                marginBottom: 22,
+                cursor: 'text',
+              }}
+            />
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>CONFIRMER</div>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               style={{
                 all: 'unset',
                 boxSizing: 'border-box',

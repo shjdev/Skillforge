@@ -28,11 +28,8 @@ const inputStyle: React.CSSProperties = {
 
 function ProfileCell({ user }: { user: AdminUserOverview['user'] }) {
   const queryClient = useQueryClient();
+  // Le parent remonte ce composant (key) à chaque changement de profil.
   const [name, setName] = React.useState(user.name);
-
-  React.useEffect(() => {
-    setName(user.name);
-  }, [user.id, user.name]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -78,7 +75,10 @@ export default function AdminUsersPage() {
 function AdminUsersDesktop() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
 
-  const { data, isLoading, error } = useQuery<AdminUserOverview & { users?: UserSummaryItem[] }>({
+  const queryClient = useQueryClient();
+  const { data, isLoading, error } = useQuery<
+    AdminUserOverview & { users?: UserSummaryItem[]; hasPersonalPassword?: boolean }
+  >({
     queryKey: ['admin-user-overview', selectedUserId],
     queryFn: async () => {
       const url = selectedUserId
@@ -90,6 +90,20 @@ function AdminUsersDesktop() {
     },
   });
 
+  const resetPassword = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'reset-password' }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Échec de la réinitialisation');
+      return payload;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-user-overview'] }),
+  });
+
   if (isLoading) {
     return <div style={{ padding: '30px 34px', color: D.text3, fontSize: 12 }}>Chargement…</div>;
   }
@@ -97,7 +111,7 @@ function AdminUsersDesktop() {
     return <div style={{ padding: '30px 34px', color: 'oklch(0.62 0.13 30)', fontSize: 12 }}>Une erreur est survenue.</div>;
   }
 
-  const { user, completedSessionsCount, users = [] } = data;
+  const { user, completedSessionsCount, users = [], hasPersonalPassword = false } = data;
 
   return (
     <div style={{ padding: '30px 34px 70px', maxWidth: 1180 }}>
@@ -129,7 +143,7 @@ function AdminUsersDesktop() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1, background: D.border, border: `1px solid ${D.border}`, marginBottom: 26 }}>
-        <ProfileCell user={user} />
+        <ProfileCell key={`${user.id}:${user.name}`} user={user} />
         <div style={{ background: D.panel, padding: '20px 22px', flex: '1 1 110px' }}>
           <div style={{ fontSize: 9, letterSpacing: '0.16em', color: D.text3, marginBottom: 12 }}>POINTS</div>
           <div style={{ fontSize: 28, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatPoints(user.totalXp)}</div>
@@ -152,6 +166,37 @@ function AdminUsersDesktop() {
             {user.currentActiveDomainId ? 'Déverrouillage au quiz' : 'Aucun domaine engagé'}
           </div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: -12, marginBottom: 26, fontSize: 10, letterSpacing: '0.12em', color: D.text3 }}>
+        <span>
+          MOT DE PASSE PERSONNEL :{' '}
+          <span style={{ color: hasPersonalPassword ? VERDANT : D.text2 }}>
+            {hasPersonalPassword ? 'DÉFINI' : 'NON DÉFINI (code d’invitation à la prochaine connexion)'}
+          </span>
+        </span>
+        {hasPersonalPassword && (
+          <button
+            onClick={() => {
+              if (window.confirm(`Réinitialiser le mot de passe de ${user.name} ? Il devra en choisir un nouveau avec le code d’invitation.`)) {
+                resetPassword.mutate(user.id);
+              }
+            }}
+            disabled={resetPassword.isPending}
+            style={{
+              all: 'unset',
+              cursor: resetPassword.isPending ? 'default' : 'pointer',
+              padding: '5px 10px',
+              border: `1px solid ${D.border3}`,
+              color: D.text2,
+            }}
+          >
+            {resetPassword.isPending ? 'RÉINITIALISATION…' : 'RÉINITIALISER'}
+          </button>
+        )}
+        {resetPassword.error && (
+          <span style={{ color: 'oklch(0.62 0.13 30)' }}>{(resetPassword.error as Error).message}</span>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(430px,1fr))', gap: 26, alignItems: 'start' }}>

@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUserId, ownerVisibilityWhere } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
+    // Catalogue commun + livres du profil connecté : les livres personnels des
+    // testeurs restent dans leur propre bibliothèque.
+    const visibility = ownerVisibilityWhere(await getCurrentUserId());
     const books = await prisma.bookReference.findMany({
+      where: visibility,
       include: {
         _count: { select: { lessons: true } },
       },
       orderBy: { addedAt: 'desc' },
     });
     const topics = await prisma.topic.findMany({
+      where: visibility,
       select: {
         id: true,
         name: true,

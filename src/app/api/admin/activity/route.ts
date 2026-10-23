@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID } from '@/lib/learning';
 
 type ActivityItem = {
   at: Date;
@@ -9,51 +8,68 @@ type ActivityItem = {
   val: string;
 };
 
-export async function GET() {
+/**
+ * Activité récente de la plateforme. Sans paramètre : tous les profils, chaque
+ * ligne préfixée du nom du profil. Avec `?userId=` : ce profil uniquement.
+ */
+export async function GET(request: Request) {
   try {
-    const [sessions, quizAttempts, placements, books] = await Promise.all([
+    const targetUserId = new URL(request.url).searchParams.get('userId');
+    const userWhere = targetUserId ? { userId: targetUserId } : {};
+
+    const [sessions, quizAttempts, placements, books, profiles] = await Promise.all([
       prisma.userSession.findMany({
-        where: { userId: DEFAULT_USER_ID, completed: true },
+        where: { ...userWhere, completed: true },
         include: { lesson: true },
         orderBy: { completedAt: 'desc' },
         take: 8,
       }),
       prisma.quizAttempt.findMany({
-        where: { userId: DEFAULT_USER_ID },
+        where: userWhere,
         include: { quiz: true },
         orderBy: { attemptedAt: 'desc' },
         take: 8,
       }),
       prisma.placementResult.findMany({
-        where: { userId: DEFAULT_USER_ID },
+        where: userWhere,
         include: { domain: true },
         orderBy: { takenAt: 'desc' },
         take: 8,
       }),
       prisma.bookReference.findMany({
+        where: targetUserId ? { ownerId: targetUserId } : undefined,
         orderBy: { addedAt: 'desc' },
         take: 8,
-        include: { lessons: true },
+        include: { lessons: { select: { id: true } } },
       }),
+      prisma.userProfile.findMany({ select: { id: true, name: true } }),
     ]);
+
+    const names = new Map(profiles.map((p) => [p.id, p.name]));
+    // En vue « tous profils », on indique à qui appartient chaque ligne.
+    const who = (userId: string | null | undefined) => {
+      if (targetUserId) return '';
+      if (!userId) return 'Catalogue · ';
+      return `${names.get(userId) ?? userId} · `;
+    };
 
     const items: ActivityItem[] = [
       ...sessions.map((s) => ({
         at: s.completedAt ?? s.scheduledAt,
         tag: 'SESSION' as const,
-        text: `Leçon — ${s.lesson.title}`,
+        text: `${who(s.userId)}Leçon — ${s.lesson.title}`,
         val: '+50',
       })),
       ...quizAttempts.map((q) => ({
         at: q.attemptedAt,
         tag: 'QUIZ' as const,
-        text: `${q.quiz.title} — ${q.passed ? 'validé' : 'échoué'}`,
+        text: `${who(q.userId)}${q.quiz.title} — ${q.passed ? 'validé' : 'échoué'}`,
         val: `${Math.round(q.percentage)}%`,
       })),
       ...placements.map((p) => ({
         at: p.takenAt,
         tag: 'PLACEMENT' as const,
-        text: `${p.domain.name} — niveau ${p.assignedLevel} assigné`,
+        text: `${who(p.userId)}${p.domain.name} — niveau ${p.assignedLevel} assigné`,
         val: `${p.score}%`,
       })),
       ...books
@@ -61,7 +77,7 @@ export async function GET() {
         .map((b) => ({
           at: b.addedAt,
           tag: 'IMPORT' as const,
-          text: `${b.title} — ${b.lessons.length} leçon(s) générées`,
+          text: `${who(b.ownerId)}${b.title} — ${b.lessons.length} leçon(s) générées`,
           val: 'PDF',
         })),
     ];

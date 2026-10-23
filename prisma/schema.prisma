@@ -257,3 +257,12 @@ model IngestJob {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
+
+// Mot de passe personnel d'un testeur. Table séparée de UserProfile pour que le
+// hash ne remonte jamais dans les réponses API qui renvoient le profil.
+model UserCredential {
+  userId       String   @id // = UserProfile.id (référence lâche, comme ownerId)
+  passwordHash String   // "scrypt$<salt hex>$<hash hex>"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

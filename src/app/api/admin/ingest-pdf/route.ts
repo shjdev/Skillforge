@@ -460,11 +460,15 @@ export async function POST(request: Request) {
     // Les leçons d'un thème personnel appartiennent au propriétaire du thème.
     const ownerId = topic.ownerId ?? resolveNewOwnerId(session, isPersonal);
 
-    // Purge uniquement des livres orphelins créés il y a plus de 30 minutes
+    // Purge des livres orphelins (sans leçon, créés il y a plus de 30 minutes)
+    // appartenant au même propriétaire que l'import en cours — jamais ceux des
+    // autres profils. Un échec de purge n'empêche pas l'import.
     const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
-    await prisma.bookReference.deleteMany({
-      where: { lessons: { none: {} }, addedAt: { lt: thirtyMinsAgo } },
-    }).catch(() => {});
+    await prisma.bookReference
+      .deleteMany({
+        where: { lessons: { none: {} }, addedAt: { lt: thirtyMinsAgo }, ownerId },
+      })
+      .catch((err) => console.error('Orphan book purge failed:', err));
 
     let extractedText = '';
     if (file || fileUrl) {

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserId, ownerVisibilityWhere } from "@/lib/serverAuth";
 
 export async function GET() {
   try {
+    // Catalogue commun + contenu du profil connecté (pas les thèmes personnels des testeurs).
+    const visibility = ownerVisibilityWhere(await getCurrentUserId());
     const domains = await prisma.domain.findMany({
+      where: visibility,
       include: {
         topics: {
+          where: visibility,
           include: {
             lessons: true,
           },
