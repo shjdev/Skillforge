@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID, XP_PER_LESSON, sortLessons, todayStr, yesterdayStr } from '@/lib/learning';
+import { XP_PER_LESSON, sortLessons, todayStr, yesterdayStr } from '@/lib/learning';
+import { getCurrentUserId } from '@/lib/serverAuth';
 
 export async function POST(request: Request) {
   try {
+    const userId = await getCurrentUserId();
     const { lessonId, alsoNext, notes } = await request.json();
     if (!lessonId) {
       return NextResponse.json({ error: 'lessonId requis' }, { status: 400 });
@@ -17,7 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Leçon introuvable' }, { status: 404 });
     }
 
-    const user = await prisma.userProfile.findUnique({ where: { id: DEFAULT_USER_ID } });
+    const user = await prisma.userProfile.findUnique({ where: { id: userId } });
     if (!user || user.currentActiveTopicId !== lesson.topicId) {
       return NextResponse.json(
         { error: 'locked', message: 'Ce sujet n’est pas votre apprentissage actif.' },
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
     let caughtUpTitle: string | null = null;
     if (alsoNext) {
       const completed = await prisma.userSession.findMany({
-        where: { userId: DEFAULT_USER_ID, completed: true, lesson: { topicId: lesson.topicId } },
+        where: { userId, completed: true, lesson: { topicId: lesson.topicId } },
         select: { lessonId: true },
       });
       const completedIds = new Set(completed.map((s) => s.lessonId));
@@ -54,13 +56,13 @@ export async function POST(request: Request) {
     let xpAwarded = 0;
     for (const target of targets) {
       const alreadyCompleted = await prisma.userSession.findFirst({
-        where: { userId: DEFAULT_USER_ID, lessonId: target.id, completed: true },
+        where: { userId, lessonId: target.id, completed: true },
       });
       if (alreadyCompleted) continue;
 
       await prisma.userSession.create({
         data: {
-          userId: DEFAULT_USER_ID,
+          userId,
           lessonId: target.id,
           sessionType:
             target.id !== lesson.id || (target.sessionType !== 'MORNING' && target.sessionType !== 'EVENING')
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
           : 1;
 
       await prisma.userProfile.update({
-        where: { id: DEFAULT_USER_ID },
+        where: { id: userId },
         data: {
           totalXp: user.totalXp + xpAwarded,
           currentStreak: newStreak,
@@ -103,7 +105,7 @@ export async function POST(request: Request) {
     }
 
     const completedSessions = await prisma.userSession.findMany({
-      where: { userId: DEFAULT_USER_ID, completed: true, lesson: { topicId: lesson.topicId } },
+      where: { userId, completed: true, lesson: { topicId: lesson.topicId } },
       select: { lessonId: true },
     });
     const completedLessonIds = new Set(completedSessions.map((s) => s.lessonId));
@@ -118,12 +120,12 @@ export async function POST(request: Request) {
     const currentDay = nextLesson ? nextLesson.dayNumber : lesson.dayNumber;
 
     const progress = await prisma.userProgress.upsert({
-      where: { userId_topicId: { userId: DEFAULT_USER_ID, topicId: lesson.topicId } },
+      where: { userId_topicId: { userId, topicId: lesson.topicId } },
       update: { currentDay, completionPct },
-      create: { userId: DEFAULT_USER_ID, topicId: lesson.topicId, currentDay, completionPct },
+      create: { userId, topicId: lesson.topicId, currentDay, completionPct },
     });
 
-    const updatedUser = await prisma.userProfile.findUnique({ where: { id: DEFAULT_USER_ID } });
+    const updatedUser = await prisma.userProfile.findUnique({ where: { id: userId } });
 
     return NextResponse.json({
       success: true,

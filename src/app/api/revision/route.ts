@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID } from '@/lib/learning';
+import { getCurrentUserId } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
     const sessions = await prisma.userSession.findMany({
-      where: { userId: DEFAULT_USER_ID, completed: true },
+      where: { userId, completed: true },
       orderBy: { completedAt: 'desc' },
       take: 200,
       include: {

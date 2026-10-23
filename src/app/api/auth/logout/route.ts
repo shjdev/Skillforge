@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { AUTH_COOKIE_NAME } from '@/lib/authGate';
+import { AUTH_COOKIE_NAME, USER_COOKIE_NAME } from '@/lib/authGate';
 
 export async function POST() {
   const response = NextResponse.json({ success: true });
   response.cookies.delete(AUTH_COOKIE_NAME);
+  response.cookies.delete(USER_COOKIE_NAME);
   return response;
 }

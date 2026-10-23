@@ -79,6 +79,25 @@ export const Sidebar = () => {
 
       <div style={{ padding: '0 22px' }}>
         <div style={{ height: 1, background: L.rule, marginBottom: 16 }} />
+        <div style={{ fontSize: 9, letterSpacing: '0.16em', color: L.ink3, marginBottom: 12 }}>
+          PROFIL ACTIF
+          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0, color: L.ink, marginTop: 3 }}>
+            {mounted ? userProfile?.name || 'Apprenant' : '—'}
+          </div>
+          <Link
+            href="/login"
+            style={{
+              display: 'inline-block',
+              marginTop: 5,
+              fontSize: 9,
+              letterSpacing: '0.12em',
+              color: EMBER,
+              textDecoration: 'none',
+            }}
+          >
+            CHANGER DE PROFIL →
+          </Link>
+        </div>
         <div style={{ fontSize: 9, letterSpacing: '0.16em', color: L.ink3, lineHeight: 1.7, marginBottom: 12 }}>
           CAPITAL
           <br />

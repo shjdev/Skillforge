@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureUserProfile, getCurrentUserId } from '@/lib/serverAuth';
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getCurrentUserId();
+    await ensureUserProfile(userId);
     const body = await request.json();
     const { domainId, testId, userAnswers } = body; // userAnswers: { questionId: selectedOption }
 
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
     // Save placement result
     const result = await prisma.placementResult.create({
       data: {
-        userId: 'default-user',
+        userId,
         domainId,
         placementTestId: testId,
         score: pct,

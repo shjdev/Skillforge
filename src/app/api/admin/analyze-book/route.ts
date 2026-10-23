@@ -2,13 +2,10 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
 import { chunkText, extractPdfText, fetchBlobBuffer, slugify, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
+import { getCurrentUserId, ownerVisibilityWhere } from '@/lib/serverAuth';
 
 const ANALYSIS_MODEL = 'gemini-3.6-flash';
 
-// Le texte extrait peut nécessiter plusieurs appels Gemini synchrones ; on
-// dépasse le délai par défaut des fonctions serverless pour laisser le temps
-// aux gros ouvrages (téléversés via Blob, donc non limités à 4,5 Mo côté
-// requête) d'être traités.
 export const maxDuration = 300;
 
 interface AnalysisTopic {
@@ -124,6 +121,7 @@ function parseAnalysis(responseText: string, totalChunks: number): BookAnalysis 
 
 export async function POST(request: Request) {
   try {
+    const userId = await getCurrentUserId();
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const fileUrl = formData.get('fileUrl') as string | null;
@@ -138,10 +136,10 @@ export async function POST(request: Request) {
     let text = '';
     if (file || fileUrl) {
       const buffer = file ? Buffer.from(await file.arrayBuffer()) : await fetchBlobBuffer(fileUrl as string);
-      text = await extractPdfText(buffer);
+      text = await extractPdfText(buffer, { apiKey });
       if (!text.trim()) {
         return NextResponse.json(
-          { error: "Aucun texte exploitable n'a pu être extrait de ce fichier (PDF scanné ou corrompu ?)." },
+          { error: "Aucun texte exploitable n'a pu être extrait de ce fichier (même après tentative d'OCR IA)." },
           { status: 422 },
         );
       }
@@ -155,7 +153,7 @@ export async function POST(request: Request) {
     const chunks = chunkText(text, 15);
 
     const domains = await prisma.domain.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...ownerVisibilityWhere(userId) },
       orderBy: { order: 'asc' },
       select: { id: true, name: true, description: true },
     });

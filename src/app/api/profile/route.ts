@@ -1,42 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureUserProfile, getCurrentUserId } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
-    let user = await prisma.userProfile.findUnique({
-      where: { id: 'default-user' },
-      include: {
-        notificationSettings: true,
-      },
-    });
-
-    if (!user) {
-      user = await prisma.userProfile.create({
-        data: {
-          id: 'default-user',
-          name: 'Apprenant SkillForge',
-          sessionMode: 'TWO_SESSIONS',
-          morningTime: '07:30',
-          eveningTime: '20:00',
-          notificationSettings: {
-            create: {
-              desktopEnabled: true,
-              soundEnabled: true,
-              morningReminderMins: 5,
-              eveningReminderMins: 5,
-              accumulationReminder: true,
-              streakReminder: true,
-            },
-          },
-        },
-        include: {
-          notificationSettings: true,
-        },
-      });
-    }
+    const userId = await getCurrentUserId();
+    const user = await ensureUserProfile(userId);
 
     const completedSessionsCount = await prisma.userSession.count({
-      where: { userId: 'default-user', completed: true },
+      where: { userId, completed: true },
     });
 
     return NextResponse.json({ ...user, completedSessionsCount });
@@ -48,11 +20,13 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const userId = await getCurrentUserId();
+    await ensureUserProfile(userId);
     const body = await request.json();
     const { name, sessionMode, morningTime, eveningTime, singleSessionTime, accumulationReminder } = body;
 
     const updatedUser = await prisma.userProfile.update({
-      where: { id: 'default-user' },
+      where: { id: userId },
       data: {
         name,
         sessionMode,

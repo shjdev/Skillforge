@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE_NAME, isAuthEnabled, isValidSessionToken } from '@/lib/authGate';
+import { AUTH_COOKIE_NAME, isAdminPasswordEnabled, isAuthEnabled, parseSessionToken } from '@/lib/authGate';
+
+const ADMIN_ONLY_API_PREFIXES = [
+  '/api/admin/users',
+  '/api/admin/activity',
+  '/api/admin/export',
+  '/api/admin/quizzes',
+  '/api/admin/lessons',
+  '/api/admin/questions',
+];
 
 /**
- * Single-password gate for public deployments. SkillForge has no user
- * accounts (DEFAULT_USER_ID is a hardcoded singleton) — without this, anyone
- * who finds the URL can read/write everything, including the admin panel's
- * PDF ingestion, which spends GEMINI_API_KEY quota. Setting APP_PASSWORD
- * turns the gate on; leaving it unset keeps local dev frictionless.
+ * Single-password gate + multi-profile support for public deployments.
+ * Setting APP_PASSWORD turns the gate on; setting ADMIN_PASSWORD additionally
+ * restricts the /admin console to the owner while allowing invited testers to
+ * use their own learner space and import their own books in /library.
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,16 +23,33 @@ export function proxy(request: NextRequest) {
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) return NextResponse.next();
 
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (isValidSessionToken(token)) return NextResponse.next();
-
-  if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 });
+  const session = parseSessionToken(token);
+  if (!session.valid) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
   }
 
-  const url = request.nextUrl.clone();
-  url.pathname = '/login';
-  url.searchParams.set('next', pathname);
-  return NextResponse.redirect(url);
+  if (isAdminPasswordEnabled() && !session.isAdmin) {
+    const isAdminPage = pathname.startsWith('/admin');
+    const isAdminOnlyApi = ADMIN_ONLY_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+    if (isAdminOnlyApi) {
+      return NextResponse.json({ error: 'Accès réservé à l’administrateur.' }, { status: 403 });
+    }
+    if (isAdminPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('admin', '1');
+      url.searchParams.set('next', pathname);
+      return NextResponse.redirect(url);
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

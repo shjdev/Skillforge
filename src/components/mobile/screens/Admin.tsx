@@ -7,6 +7,7 @@ import { EMBER, VERDANT, D, FONT_SERIF, formatPoints } from '@/lib/theme';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMounted } from '@/hooks/useMounted';
 import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
+import { runTopicStepIngestion } from '@/lib/ingestClient';
 
 interface LogLine {
   t: string;

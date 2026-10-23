@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID, sortLessons } from '@/lib/learning';
+import { sortLessons } from '@/lib/learning';
+import { ensureUserProfile, getCurrentUserId } from '@/lib/serverAuth';
 
 export async function GET(
   request: Request,
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    const userId = await getCurrentUserId();
 
     const topic = await prisma.topic.findUnique({
       where: { slug },
@@ -22,14 +24,11 @@ export async function GET(
       },
     });
 
-    if (!topic) {
+    if (!topic || (topic.ownerId && topic.ownerId !== userId)) {
       return NextResponse.json({ error: 'Sujet introuvable' }, { status: 404 });
     }
 
-    let user = await prisma.userProfile.findUnique({ where: { id: DEFAULT_USER_ID } });
-    if (!user) {
-      user = await prisma.userProfile.create({ data: { id: DEFAULT_USER_ID } });
-    }
+    let user = await ensureUserProfile(userId);
 
     // Anti-dispersion lock: only one domain/topic may be active until completed.
     if (user.currentActiveDomainId && user.currentActiveDomainId !== topic.domainId) {
@@ -62,9 +61,9 @@ export async function GET(
     }
 
     const progress = await prisma.userProgress.upsert({
-      where: { userId_topicId: { userId: DEFAULT_USER_ID, topicId: topic.id } },
+      where: { userId_topicId: { userId, topicId: topic.id } },
       update: {},
-      create: { userId: DEFAULT_USER_ID, topicId: topic.id, currentWeek: 1, currentDay: 1 },
+      create: { userId, topicId: topic.id, currentWeek: 1, currentDay: 1 },
     });
 
     // Starting this topic for the first time: acquire the lock. A topic the
@@ -72,14 +71,15 @@ export async function GET(
     // otherwise just viewing a completed topic would strand the lock forever.
     if (!user.currentActiveDomainId && progress.status !== 'COMPLETED') {
       user = await prisma.userProfile.update({
-        where: { id: DEFAULT_USER_ID },
+        where: { id: userId },
         data: { currentActiveDomainId: topic.domainId, currentActiveTopicId: topic.id },
+        include: { notificationSettings: true },
       });
     }
 
     const completedSessions = await prisma.userSession.findMany({
       where: {
-        userId: DEFAULT_USER_ID,
+        userId,
         completed: true,
         lesson: { topicId: topic.id },
       },
@@ -110,7 +110,7 @@ export async function GET(
           })),
         };
         quizAttempt = await prisma.quizAttempt.findFirst({
-          where: { userId: DEFAULT_USER_ID, quizId: weeklyQuiz.id },
+          where: { userId, quizId: weeklyQuiz.id },
           orderBy: { attemptedAt: 'desc' },
         });
       } else if (progress.status !== 'COMPLETED') {
@@ -122,7 +122,7 @@ export async function GET(
         });
         if (user.currentActiveTopicId === topic.id) {
           await prisma.userProfile.update({
-            where: { id: DEFAULT_USER_ID },
+            where: { id: userId },
             data: { currentActiveDomainId: null, currentActiveTopicId: null },
           });
         }

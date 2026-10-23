@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { checkPassword, createSessionToken, isAuthEnabled, isValidSessionToken, SESSION_MAX_AGE_SECONDS } from './authGate';
+import {
+  checkAdminPassword,
+  checkPassword,
+  createSessionToken,
+  isAuthEnabled,
+  isValidSessionToken,
+  normalizeProfileId,
+  parseSessionToken,
+  resolveLoginProfile,
+  SESSION_MAX_AGE_SECONDS,
+} from './authGate';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -19,7 +29,7 @@ describe('isAuthEnabled', () => {
   });
 });
 
-describe('checkPassword', () => {
+describe('checkPassword & checkAdminPassword', () => {
   beforeEach(() => {
     process.env.APP_PASSWORD = 'correct-horse-battery-staple';
   });
@@ -40,9 +50,31 @@ describe('checkPassword', () => {
   it('rejects an empty candidate', () => {
     expect(checkPassword('')).toBe(false);
   });
+
+  it('distinguishes ADMIN_PASSWORD from APP_PASSWORD when ADMIN_PASSWORD is set', () => {
+    process.env.ADMIN_PASSWORD = 'super-secret-admin';
+    expect(checkPassword('correct-horse-battery-staple')).toBe(true);
+    expect(checkPassword('super-secret-admin')).toBe(true);
+    expect(checkAdminPassword('correct-horse-battery-staple')).toBe(false);
+    expect(checkAdminPassword('super-secret-admin')).toBe(true);
+  });
 });
 
-describe('createSessionToken / isValidSessionToken', () => {
+describe('normalizeProfileId', () => {
+  it('returns default-user for empty or default names', () => {
+    expect(normalizeProfileId('')).toBe('default-user');
+    expect(normalizeProfileId('   ')).toBe('default-user');
+    expect(normalizeProfileId(null)).toBe('default-user');
+    expect(normalizeProfileId('Apprenant')).toBe('default-user');
+  });
+
+  it('normalizes friend names into deterministic user-<slug> IDs', () => {
+    expect(normalizeProfileId('Lucas')).toBe('user-lucas');
+    expect(normalizeProfileId('  Éléonore Martin  ')).toBe('user-eleonore-martin');
+  });
+});
+
+describe('createSessionToken / isValidSessionToken / parseSessionToken', () => {
   beforeEach(() => {
     process.env.APP_PASSWORD = 'correct-horse-battery-staple';
     process.env.AUTH_SECRET = 'a-separate-signing-secret';
@@ -57,6 +89,14 @@ describe('createSessionToken / isValidSessionToken', () => {
   it('round-trips: a freshly created token is valid', () => {
     const token = createSessionToken();
     expect(isValidSessionToken(token)).toBe(true);
+  });
+
+  it('preserves userId and isAdmin in session token metadata', () => {
+    const token = createSessionToken(Date.now(), { userId: 'user-lucas', isAdmin: false });
+    const parsed = parseSessionToken(token);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.userId).toBe('user-lucas');
+    expect(parsed.isAdmin).toBe(false);
   });
 
   it('rejects a missing or malformed token', () => {
@@ -88,5 +128,28 @@ describe('createSessionToken / isValidSessionToken', () => {
     delete process.env.AUTH_SECRET;
     const token = createSessionToken();
     expect(isValidSessionToken(token)).toBe(true);
+  });
+});
+
+describe('resolveLoginProfile', () => {
+  it('refuses an empty name for a non-admin tester', () => {
+    const result = resolveLoginProfile('', false);
+    expect(result.ok).toBe(false);
+    expect(resolveLoginProfile('   ', false).ok).toBe(false);
+    expect(resolveLoginProfile(null, false).ok).toBe(false);
+  });
+
+  it("refuses a non-admin name that maps to the owner's profile", () => {
+    expect(resolveLoginProfile('Apprenant', false).ok).toBe(false);
+    expect(resolveLoginProfile('default-user', false).ok).toBe(false);
+    expect(resolveLoginProfile('Apprenant SkillForge', false).ok).toBe(false);
+  });
+
+  it('opens a personal profile for a named tester', () => {
+    expect(resolveLoginProfile('Lucas', false)).toEqual({ ok: true, userId: 'user-lucas' });
+  });
+
+  it("lets the admin open the owner's profile with an empty name", () => {
+    expect(resolveLoginProfile('', true)).toEqual({ ok: true, userId: 'default-user' });
   });
 });

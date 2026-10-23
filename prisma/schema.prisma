@@ -44,6 +44,7 @@ model Domain {
   color            String            @default("#3b82f6")
   order            Int               @default(1)
   isActive         Boolean           @default(true)
+  ownerId          String?           // null = catalogue commun ; sinon profil ayant importé ce domaine
 
   topics           Topic[]
   placementTests   PlacementTest[]
@@ -61,6 +62,7 @@ model Topic {
   maxDifficultyLevel Int            @default(5) // 1: Débutant -> 5: Spécialiste
   estimatedWeeks     Int            @default(1)
   prerequisites      String         @default("[]") // JSON string of topic slugs
+  ownerId            String?        // null = catalogue commun ; sinon profil ayant importé ce thème
 
   lessons            Lesson[]
   quizzes            Quiz[]
@@ -76,6 +78,7 @@ model BookReference {
   purchaseUrl  String?
   description  String
   pdfPath      String?  // Optional local path if user bound a local PDF
+  ownerId      String?  // null = catalogue commun ; sinon profil ayant importé ce livre
   addedAt      DateTime @default(now())
 
   lessons      Lesson[]
@@ -250,6 +253,7 @@ model IngestJob {
   lessonsCreated   Int      @default(0)
   questionsCreated Int      @default(0)
   message          String?
+  ownerId          String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }

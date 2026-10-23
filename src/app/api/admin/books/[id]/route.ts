@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSessionContext } from '@/lib/serverAuth';
 
 export async function DELETE(
   request: Request,
@@ -9,6 +10,7 @@ export async function DELETE(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const deleteLessons = searchParams.get('deleteLessons') === 'true';
+    const session = await getSessionContext();
 
     const book = await prisma.bookReference.findUnique({
       where: { id },
@@ -16,6 +18,13 @@ export async function DELETE(
     });
     if (!book) {
       return NextResponse.json({ error: 'Livre introuvable' }, { status: 404 });
+    }
+
+    if (!session.isAdmin && book.ownerId !== session.userId) {
+      return NextResponse.json(
+        { error: 'Vous ne pouvez supprimer que les livres que vous avez vous-même importés.' },
+        { status: 403 }
+      );
     }
 
     if (book._count.lessons > 0 && !deleteLessons) {

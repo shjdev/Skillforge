@@ -1,11 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { D, EMBER, VERDANT, formatPoints } from '@/lib/theme';
 import type { AdminUserOverview } from '@/types/models';
 import MobileAdmin from '@/components/mobile/screens/Admin';
+
+interface UserSummaryItem {
+  id: string;
+  name: string;
+  totalXp: number;
+  currentStreak: number;
+  currentActiveDomainId: string | null;
+}
 
 const inputStyle: React.CSSProperties = {
   all: 'unset',
@@ -21,6 +29,10 @@ const inputStyle: React.CSSProperties = {
 function ProfileCell({ user }: { user: AdminUserOverview['user'] }) {
   const queryClient = useQueryClient();
   const [name, setName] = React.useState(user.name);
+
+  React.useEffect(() => {
+    setName(user.name);
+  }, [user.id, user.name]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -51,7 +63,7 @@ function ProfileCell({ user }: { user: AdminUserOverview['user'] }) {
         onBlur={() => name !== user.name && name && saveMutation.mutate()}
       />
       <div style={{ fontSize: 10, color: D.text3, marginTop: 9 }}>
-        {saveMutation.isPending ? 'Enregistrement…' : "Modifiable · s'applique aux rappels"}
+        {saveMutation.isPending ? 'Enregistrement…' : `ID: ${user.id}`}
       </div>
     </div>
   );
@@ -64,10 +76,15 @@ export default function AdminUsersPage() {
 }
 
 function AdminUsersDesktop() {
-  const { data, isLoading, error } = useQuery<AdminUserOverview>({
-    queryKey: ['admin-user-overview'],
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+  const { data, isLoading, error } = useQuery<AdminUserOverview & { users?: UserSummaryItem[] }>({
+    queryKey: ['admin-user-overview', selectedUserId],
     queryFn: async () => {
-      const res = await fetch('/api/admin/users');
+      const url = selectedUserId
+        ? `/api/admin/users?userId=${encodeURIComponent(selectedUserId)}`
+        : '/api/admin/users';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch user');
       return res.json();
     },
@@ -80,13 +97,35 @@ function AdminUsersDesktop() {
     return <div style={{ padding: '30px 34px', color: 'oklch(0.62 0.13 30)', fontSize: 12 }}>Une erreur est survenue.</div>;
   }
 
-  const { user, completedSessionsCount } = data;
+  const { user, completedSessionsCount, users = [] } = data;
 
   return (
     <div style={{ padding: '30px 34px 70px', maxWidth: 1180 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 13, letterSpacing: '0.20em', fontWeight: 600 }}>UTILISATEUR</h1>
-        <span style={{ fontSize: 10, color: D.text3, letterSpacing: '0.1em' }}>PROFIL UNIQUE</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0, fontSize: 13, letterSpacing: '0.20em', fontWeight: 600 }}>PROFILS & TESTEURS</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {users.map((u) => {
+            const active = u.id === user.id;
+            return (
+              <button
+                key={u.id}
+                onClick={() => setSelectedUserId(u.id)}
+                style={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  letterSpacing: '0.12em',
+                  padding: '6px 11px',
+                  border: `1px solid ${active ? EMBER : D.border3}`,
+                  background: active ? D.panel2 : 'transparent',
+                  color: active ? EMBER : D.text2,
+                }}
+              >
+                {u.name.toUpperCase()} ({formatPoints(u.totalXp)})
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1, background: D.border, border: `1px solid ${D.border}`, marginBottom: 26 }}>

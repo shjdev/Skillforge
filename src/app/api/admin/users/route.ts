@@ -1,37 +1,55 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID } from '@/lib/learning';
+import { ensureUserProfile, getCurrentUserId } from '@/lib/serverAuth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await prisma.userProfile.findUnique({
-      where: { id: DEFAULT_USER_ID },
-      include: {
-        progresses: {
-          include: { topic: { include: { domain: true } } },
+    const { searchParams } = new URL(request.url);
+    const requestedId = searchParams.get('userId');
+    const activeId = await getCurrentUserId();
+    const targetUserId = requestedId || activeId;
+
+    await ensureUserProfile(targetUserId);
+
+    const [user, completedSessionsCount, allUsers] = await Promise.all([
+      prisma.userProfile.findUnique({
+        where: { id: targetUserId },
+        include: {
+          progresses: {
+            include: { topic: { include: { domain: true } } },
+          },
+          quizAttempts: {
+            include: { quiz: true },
+            orderBy: { attemptedAt: 'desc' },
+            take: 10,
+          },
+          placementResults: {
+            include: { domain: true },
+            orderBy: { takenAt: 'desc' },
+          },
+          notificationSettings: true,
         },
-        quizAttempts: {
-          include: { quiz: true },
-          orderBy: { attemptedAt: 'desc' },
-          take: 10,
+      }),
+      prisma.userSession.count({
+        where: { userId: targetUserId, completed: true },
+      }),
+      prisma.userProfile.findMany({
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          totalXp: true,
+          currentStreak: true,
+          currentActiveDomainId: true,
         },
-        placementResults: {
-          include: { domain: true },
-          orderBy: { takenAt: 'desc' },
-        },
-        notificationSettings: true,
-      },
-    });
+      }),
+    ]);
 
     if (!user) {
       return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 });
     }
 
-    const completedSessionsCount = await prisma.userSession.count({
-      where: { userId: DEFAULT_USER_ID, completed: true },
-    });
-
-    return NextResponse.json({ user, completedSessionsCount });
+    return NextResponse.json({ user, completedSessionsCount, users: allUsers });
   } catch (error) {
     console.error('Error fetching admin user overview:', error);
     return NextResponse.json({ error: 'Échec du chargement du profil' }, { status: 500 });

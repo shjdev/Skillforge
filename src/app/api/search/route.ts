@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUserId, ownerVisibilityWhere } from '@/lib/serverAuth';
 
 export async function GET(request: Request) {
   try {
+    const userId = await getCurrentUserId();
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') || '').trim();
     if (q.length < 2) {
@@ -11,6 +13,7 @@ export async function GET(request: Request) {
 
     const lessons = await prisma.lesson.findMany({
       where: {
+        topic: ownerVisibilityWhere(userId),
         OR: [
           { title: { contains: q, mode: 'insensitive' } },
           { contentMd: { contains: q, mode: 'insensitive' } },

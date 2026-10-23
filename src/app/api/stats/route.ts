@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_USER_ID, XP_PER_LESSON } from '@/lib/learning';
+import { XP_PER_LESSON } from '@/lib/learning';
+import { getCurrentUserId } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
     const since = new Date();
     since.setDate(since.getDate() - 29);
     since.setHours(0, 0, 0, 0);
 
     const [sessions, user] = await Promise.all([
       prisma.userSession.findMany({
-        where: { userId: DEFAULT_USER_ID, completed: true, scheduledAt: { gte: since } },
+        where: { userId, completed: true, scheduledAt: { gte: since } },
         select: { scheduledAt: true, durationSeconds: true, sessionType: true },
       }),
-      prisma.userProfile.findUnique({ where: { id: DEFAULT_USER_ID } }),
+      prisma.userProfile.findUnique({ where: { id: userId } }),
     ]);
 
     const byDay = new Map<string, { date: string; label: string; sessions: number; minutes: number; points: number }>();

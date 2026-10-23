@@ -1,27 +1,32 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUserId, ownerVisibilityWhere } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
+    const visibility = ownerVisibilityWhere(userId);
+
     const domains = await prisma.domain.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...visibility },
       orderBy: { order: 'asc' },
       include: {
         topics: {
+          where: visibility,
           include: {
             userProgresses: {
-              where: { userId: 'default-user' },
+              where: { userId },
             },
           },
         },
         placementResults: {
-          where: { userId: 'default-user' },
+          where: { userId },
         },
       },
     });
 
     const user = await prisma.userProfile.findUnique({
-      where: { id: 'default-user' },
+      where: { id: userId },
       select: { currentActiveDomainId: true, currentActiveTopicId: true },
     });
 

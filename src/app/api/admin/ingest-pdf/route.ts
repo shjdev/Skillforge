@@ -2,10 +2,9 @@ import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenAI } from '@google/genai';
 import { chunkText, extractPdfText, fetchBlobBuffer, BASE_CHUNKS, PLAN_OVERVIEW_CHARS } from '@/lib/ingestion';
+import { getSessionContext } from '@/lib/serverAuth';
+import { canWrite, resolveNewOwnerId } from '@/lib/ownership';
 
-// Les gros ouvrages arrivent via une URL Blob (non limitée à 4,5 Mo), et la
-// génération qui suit enchaîne un appel Gemini par extrait dans `after()` :
-// celui-ci partage la durée max de la route, d'où le plafond Vercel (300 s).
 export const maxDuration = 300;
 
 const MIN_CHUNKS = 6;
@@ -14,34 +13,26 @@ const LESSONS_PER_CHUNK = 2;
 const QUIZ_PASSING_SCORE = 80;
 const GENERATION_MODEL = 'gemini-3.6-flash';
 
-interface GeneratedLesson {
+export interface GeneratedLesson {
   title: string;
   sessionType: string;
   contentMd: string;
   chapterCitation: string;
   keyConcepts: string[];
 }
-interface GeneratedQuestion {
+export interface GeneratedQuestion {
   questionText: string;
   options: string[];
   correctAnswer: string;
   explanation: string;
 }
-interface PlanEntry {
+export interface PlanEntry {
   dayNumber: number;
   title: string;
   objective: string;
   difficultyLevel: number;
 }
 
-/**
- * Prompt for the planning pass: reads a short overview of every chunk (in book
- * order) and returns one syllabus entry per chunk, so that difficulty and
- * subject progression are decided by reading the WHOLE book, not by a blind
- * per-chunk guess. This is what gives the per-day generation calls below a
- * shared sense of "what came before / what's next" instead of running in
- * total isolation from each other.
- */
 function planPrompt(chunks: { content: string; index: number }[], title: string, author: string, maxDifficultyLevel: number): string {
   const overview = chunks
     .map((c) => `--- Extrait ${c.index}/${chunks.length} ---\n${c.content.slice(0, PLAN_OVERVIEW_CHARS)}${c.content.length > PLAN_OVERVIEW_CHARS ? '…' : ''}`)
@@ -147,7 +138,7 @@ export function stripJsonFence(responseText: string): string {
   return responseText.replace(/```json\n?|\n?```/g, '').trim();
 }
 
-function parseAiJson(responseText: string): { lessons: GeneratedLesson[]; quizQuestions: GeneratedQuestion[] } {
+export function parseAiJson(responseText: string): { lessons: GeneratedLesson[]; quizQuestions: GeneratedQuestion[] } {
   const parsed = JSON.parse(stripJsonFence(responseText));
   return {
     lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
@@ -155,11 +146,14 @@ function parseAiJson(responseText: string): { lessons: GeneratedLesson[]; quizQu
   };
 }
 
-/**
- * Runs the planning pass and returns a syllabus keyed by chunk/day number.
- * Returns null (rather than throwing) on any failure so the caller can fall
- * back to independent per-chunk generation instead of failing the whole job.
- */
+export function formatPlanOverview(planEntries: PlanEntry[]): string {
+  if (!planEntries || planEntries.length === 0) return '';
+  return [...planEntries]
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .map((e) => `- Jour ${e.dayNumber} : ${e.title}${e.objective ? ` (${e.objective})` : ''}`)
+    .join('\n');
+}
+
 async function generatePlan(
   ai: GoogleGenAI,
   chunks: { content: string; index: number }[],
@@ -193,15 +187,126 @@ async function generatePlan(
   }
 }
 
+async function ensureBookAndQuiz(params: {
+  bookId?: string | null;
+  title: string;
+  author: string;
+  topicId: string;
+  ownerId: string | null;
+}): Promise<{ bookId: string; quizId: string }> {
+  const { bookId, title, author, topicId, ownerId } = params;
+  let resolvedBookId = bookId || '';
+  if (resolvedBookId) {
+    const existingBook = await prisma.bookReference.findUnique({ where: { id: resolvedBookId } });
+    if (!existingBook) resolvedBookId = '';
+  }
+  if (!resolvedBookId) {
+    const createdBook = await prisma.bookReference.create({
+      data: {
+        title,
+        author,
+        description: `Ouvrage ingéré pour le topic ${topicId}`,
+        ownerId,
+      },
+    });
+    resolvedBookId = createdBook.id;
+  }
+
+  const existingQuiz = await prisma.quiz.findFirst({
+    where: { topicId, quizType: 'WEEKLY' },
+  });
+  let quizId: string;
+  if (existingQuiz) {
+    quizId = existingQuiz.id;
+  } else {
+    const createdQuiz = await prisma.quiz.create({
+      data: {
+        topicId,
+        title: `Quiz de validation — ${title}`,
+        difficultyLevel: 1,
+        passingScore: QUIZ_PASSING_SCORE,
+        quizType: 'WEEKLY',
+      },
+    });
+    quizId = createdQuiz.id;
+  }
+
+  return { bookId: resolvedBookId, quizId };
+}
+
+/**
+ * Persiste immédiatement en base les leçons et questions d'un extrait (chunk)
+ * afin qu'aucune progression ne soit perdue en cas d'interruption réseau ou
+ * de timeout serverless.
+ */
+async function persistChunkOutput(params: {
+  topicId: string;
+  bookId: string;
+  quizId: string;
+  title: string;
+  dayNumber: number;
+  difficultyLevel: number;
+  lessons: GeneratedLesson[];
+  quizQuestions: GeneratedQuestion[];
+}): Promise<{ lessonsSaved: number; questionsSaved: number }> {
+  const { topicId, bookId, quizId, title, dayNumber, difficultyLevel, lessons, quizQuestions } = params;
+  const boundedLessons = lessons.slice(0, LESSONS_PER_CHUNK);
+  let lessonsSaved = 0;
+  let questionsSaved = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const lesson of boundedLessons) {
+      await tx.lesson.create({
+        data: {
+          topicId,
+          title: lesson.title,
+          contentMd: lesson.contentMd,
+          dayNumber,
+          sessionType: ['MORNING', 'EVENING', 'FULL_DAY'].includes(lesson.sessionType)
+            ? lesson.sessionType
+            : 'FULL_DAY',
+          difficultyLevel,
+          durationMinutes: 30,
+          keyConcepts: JSON.stringify(lesson.keyConcepts || []),
+          contentSource: 'ai',
+          bookReferenceId: bookId,
+          chapterCitation: lesson.chapterCitation || `Extrait du livre « ${title} »`,
+        },
+      });
+      lessonsSaved += 1;
+    }
+
+    for (const q of quizQuestions) {
+      if (!Array.isArray(q.options) || q.options.length < 2 || !q.correctAnswer) continue;
+      await tx.quizQuestion.create({
+        data: {
+          quizId,
+          questionText: q.questionText,
+          options: JSON.stringify(q.options),
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation || '',
+          points: 20,
+          questionType: 'MCQ',
+        },
+      });
+      questionsSaved += 1;
+    }
+  });
+
+  return { lessonsSaved, questionsSaved };
+}
+
 async function processIngestJob(jobId: string, params: {
   topicId: string;
+  bookId?: string | null;
   title: string;
   author: string;
   apiKey: string;
   chunks: { content: string; index: number }[];
   maxDifficultyLevel: number;
+  ownerId: string | null;
 }) {
-  const { topicId, title, author, apiKey, chunks, maxDifficultyLevel } = params;
+  const { topicId, bookId: initialBookId, title, author, apiKey, chunks, maxDifficultyLevel, ownerId } = params;
   try {
     await prisma.ingestJob.update({
       where: { id: jobId },
@@ -210,17 +315,18 @@ async function processIngestJob(jobId: string, params: {
 
     const ai = new GoogleGenAI({ apiKey });
     const plan = await generatePlan(ai, chunks, title, author, maxDifficultyLevel);
+    const planOverview = plan ? formatPlanOverview(Array.from(plan.values())) : '';
 
-    // Vue d'ensemble du cursus : chaque appel de génération voit l'arc complet.
-    const planOverview = plan
-      ? Array.from(plan.values())
-          .sort((a, b) => a.dayNumber - b.dayNumber)
-          .map((e) => `- Jour ${e.dayNumber} : ${e.title}${e.objective ? ` (${e.objective})` : ''}`)
-          .join('\n')
-      : '';
+    const { bookId, quizId } = await ensureBookAndQuiz({
+      bookId: initialBookId,
+      title,
+      author,
+      topicId,
+      ownerId,
+    });
 
-    const allLessons: (GeneratedLesson & { dayNumber: number; difficultyLevel: number })[] = [];
-    const allQuestions: GeneratedQuestion[] = [];
+    let totalLessonsSaved = 0;
+    let totalQuestionsSaved = 0;
     let prevGenerated: { title: string; concepts: string[] } | undefined;
 
     for (const chunk of chunks) {
@@ -236,13 +342,19 @@ async function processIngestJob(jobId: string, params: {
           contents: lessonPrompt(chunk, title, author, chunks.length, difficultyLevel, context, planOverview, prevGenerated),
         });
         const { lessons, quizQuestions } = parseAiJson(response.text || '');
-        for (let i = 0; i < Math.min(lessons.length, LESSONS_PER_CHUNK); i++) {
-          allLessons.push({ ...lessons[i], dayNumber: chunk.index, difficultyLevel });
-        }
-        allQuestions.push(...quizQuestions);
+        const { lessonsSaved, questionsSaved } = await persistChunkOutput({
+          topicId,
+          bookId,
+          quizId,
+          title,
+          dayNumber: chunk.index,
+          difficultyLevel,
+          lessons,
+          quizQuestions,
+        });
+        totalLessonsSaved += lessonsSaved;
+        totalQuestionsSaved += questionsSaved;
 
-        // Continuité réelle : la génération du jour suivant s'appuiera sur ce qui
-        // vient d'être produit (et pas seulement sur le plan théorique).
         const theoryLesson = lessons.find((l) => (l.keyConcepts || []).length > 0);
         if (theoryLesson) {
           prevGenerated = {
@@ -253,103 +365,38 @@ async function processIngestJob(jobId: string, params: {
       } catch (err) {
         console.error(`[ingest-pdf] Échec de génération pour l'extrait ${chunk.index}/${chunks.length} :`, err);
       }
+
       await prisma.ingestJob.update({
         where: { id: jobId },
         data: {
           processedChunks: chunk.index,
-          lessonsCreated: allLessons.length,
-          questionsCreated: allQuestions.length,
+          lessonsCreated: totalLessonsSaved,
+          questionsCreated: totalQuestionsSaved,
           message: plan ? 'Génération selon le plan de cours…' : 'Génération (sans plan — extraits traités indépendamment)…',
         },
       });
     }
 
-    if (allLessons.length === 0) {
+    if (totalLessonsSaved === 0) {
       await prisma.ingestJob.update({
         where: { id: jobId },
-        data: { status: 'ERROR', message: "La génération IA a échoué pour tous les extraits. Vérifiez la clé API et réessayez." },
+        data: { status: 'ERROR', message: 'La génération IA a échoué pour tous les extraits. Vérifiez la clé API et réessayez.' },
       });
       return;
     }
-
-    await prisma.$transaction(async (tx) => {
-      const bookRef = await tx.bookReference.create({
-        data: {
-          title,
-          author,
-          description: `Ouvrage ingéré via Console Admin pour le topic ${topicId}`,
-        },
-      });
-
-      for (const lesson of allLessons) {
-        await tx.lesson.create({
-          data: {
-            topicId,
-            title: lesson.title,
-            contentMd: lesson.contentMd,
-            dayNumber: lesson.dayNumber,
-            sessionType: ['MORNING', 'EVENING', 'FULL_DAY'].includes(lesson.sessionType)
-              ? lesson.sessionType
-              : 'FULL_DAY',
-            difficultyLevel: lesson.difficultyLevel,
-            durationMinutes: 30,
-            keyConcepts: JSON.stringify(lesson.keyConcepts || []),
-            contentSource: 'ai',
-            bookReferenceId: bookRef.id,
-            chapterCitation: lesson.chapterCitation || `Extrait du livre « ${title} »`,
-          },
-        });
-      }
-
-      if (allQuestions.length > 0) {
-        const existingQuiz = await tx.quiz.findFirst({
-          where: { topicId, quizType: 'WEEKLY' },
-          include: { questions: true },
-        });
-        let targetQuizId: string;
-        if (existingQuiz) {
-          targetQuizId = existingQuiz.id;
-        } else {
-          const quiz = await tx.quiz.create({
-            data: {
-              topicId,
-              title: `Quiz de validation — ${title}`,
-              difficultyLevel: 1,
-              passingScore: QUIZ_PASSING_SCORE,
-              quizType: 'WEEKLY',
-            },
-          });
-          targetQuizId = quiz.id;
-        }
-        for (const q of allQuestions) {
-          if (!Array.isArray(q.options) || q.options.length < 2 || !q.correctAnswer) continue;
-          await tx.quizQuestion.create({
-            data: {
-              quizId: targetQuizId,
-              questionText: q.questionText,
-              options: JSON.stringify(q.options),
-              correctAnswer: q.correctAnswer,
-              explanation: q.explanation || '',
-              points: 20,
-              questionType: 'MCQ',
-            },
-          });
-        }
-      }
-    });
 
     await prisma.ingestJob.update({
       where: { id: jobId },
       data: {
         status: 'DONE',
         bookTitle: title,
-        lessonsCreated: allLessons.length,
-        questionsCreated: allQuestions.length,
+        lessonsCreated: totalLessonsSaved,
+        questionsCreated: totalQuestionsSaved,
         message:
-          `${allLessons.length} leçons et ${allQuestions.length} questions créées` +
+          `${totalLessonsSaved} leçons et ${totalQuestionsSaved} questions créées` +
           (plan ? ' (avec plan de cursus cohérent).' : ' (plan indisponible — extraits traités indépendamment).') +
-          (allLessons.length < chunks.length * LESSONS_PER_CHUNK
-            ? ` ${chunks.length - allLessons.length / LESSONS_PER_CHUNK} extrait(s) ont échoué et peuvent être relancés.`
+          (totalLessonsSaved < chunks.length * LESSONS_PER_CHUNK
+            ? ` ${chunks.length - Math.floor(totalLessonsSaved / LESSONS_PER_CHUNK)} extrait(s) ont échoué et peuvent être relancés.`
             : ''),
       },
     });
@@ -371,8 +418,10 @@ export async function POST(request: Request) {
     const author = (formData.get('author') as string) || 'Auteur inconnu';
     const domainId = formData.get('domainId') as string;
     const topicId = formData.get('topicId') as string;
+    const bookIdParam = (formData.get('bookId') as string) || null;
+    const mode = (formData.get('mode') as string) || 'background';
+    const isPersonal = formData.get('personal') === 'true';
     const apiKey = (formData.get('apiKey') as string) || process.env.GEMINI_API_KEY;
-    // Tranche d'extraits (import automatique multi-thèmes) : bornes 1-based incluses.
     const chunkStart = parseInt(formData.get('chunkStart') as string) || 0;
     const chunkEnd = parseInt(formData.get('chunkEnd') as string) || 0;
     const hasChunkRange = chunkStart >= 1 && chunkEnd >= chunkStart;
@@ -383,27 +432,47 @@ export async function POST(request: Request) {
 
     const topic = await prisma.topic.findUnique({
       where: { id: topicId },
-      select: { id: true, name: true, maxDifficultyLevel: true, estimatedWeeks: true },
+      select: { id: true, name: true, maxDifficultyLevel: true, estimatedWeeks: true, ownerId: true },
     });
     if (!topic) {
       return NextResponse.json({ error: 'Topic introuvable' }, { status: 404 });
     }
 
-    // Purge des livres orphelins (échecs d'ingestion antérieurs : aucune leçon liée)
-    const purged = await prisma.bookReference.deleteMany({
-      where: { lessons: { none: {} } },
-    });
-    if (purged.count > 0) {
-      console.log(`[ingest-pdf] ${purged.count} livre(s) orphelin(s) purgé(s).`);
+    const session = await getSessionContext();
+    if (!canWrite(session, topic.ownerId)) {
+      return NextResponse.json(
+        { error: 'Vous ne pouvez générer des leçons que dans vos propres thèmes.' },
+        { status: 403 },
+      );
     }
+    if (bookIdParam) {
+      const existingBook = await prisma.bookReference.findUnique({
+        where: { id: bookIdParam },
+        select: { ownerId: true },
+      });
+      if (existingBook && !canWrite(session, existingBook.ownerId)) {
+        return NextResponse.json(
+          { error: 'Vous ne pouvez compléter que les livres que vous avez vous-même importés.' },
+          { status: 403 },
+        );
+      }
+    }
+    // Les leçons d'un thème personnel appartiennent au propriétaire du thème.
+    const ownerId = topic.ownerId ?? resolveNewOwnerId(session, isPersonal);
+
+    // Purge uniquement des livres orphelins créés il y a plus de 30 minutes
+    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+    await prisma.bookReference.deleteMany({
+      where: { lessons: { none: {} }, addedAt: { lt: thirtyMinsAgo } },
+    }).catch(() => {});
 
     let extractedText = '';
     if (file || fileUrl) {
       const buffer = file ? Buffer.from(await file.arrayBuffer()) : await fetchBlobBuffer(fileUrl as string);
-      extractedText = await extractPdfText(buffer);
+      extractedText = await extractPdfText(buffer, { apiKey });
       if (!extractedText.trim()) {
         return NextResponse.json(
-          { error: "Aucun texte exploitable n'a pu être extrait de ce fichier (PDF scanné ou corrompu ?)." },
+          { error: "Aucun texte exploitable n'a pu être extrait de ce fichier (même après tentative d'OCR IA)." },
           { status: 422 },
         );
       }
@@ -419,7 +488,8 @@ export async function POST(request: Request) {
         data: {
           title,
           author,
-          description: `Ouvrage ingéré via Console Admin pour le topic ${topic.name}`,
+          description: `Ouvrage ingéré pour le topic ${topic.name}`,
+          ownerId,
         },
       });
       return NextResponse.json({
@@ -429,37 +499,69 @@ export async function POST(request: Request) {
       });
     }
 
-    // Deux modes de découpage :
-    // - tranche explicite (import automatique) : découpage de référence sur
-    //   BASE_CHUNKS pour que les bornes correspondent à celles de l'analyse ;
-    // - sinon volume aligné sur la durée prévue du thème (mode manuel).
-    const chunks = hasChunkRange
+    const rawChunks = hasChunkRange
       ? chunkText(extractedText, BASE_CHUNKS).slice(chunkStart - 1, chunkEnd)
       : chunkText(extractedText, Math.max(MIN_CHUNKS, Math.min(topic.estimatedWeeks * 7, MAX_CHUNKS)));
+    // Réindexe les chunks de 1..N pour ce thème afin que les dayNumber soient 1..N
+    const chunks = rawChunks.map((c, idx) => ({ content: c.content, index: idx + 1 }));
     if (chunks.length === 0) {
       return NextResponse.json({ error: 'Le texte fourni est vide.' }, { status: 422 });
     }
 
     const job = await prisma.ingestJob.create({
       data: {
-        status: 'PENDING',
+        status: mode === 'step' ? 'RUNNING' : 'PENDING',
         bookTitle: title,
         topicName: topic.name,
         totalChunks: chunks.length,
+        ownerId,
       },
     });
 
-    // Traitement en arrière-plan : le client suit la progression via GET ?jobId=.
-    // `after()` garde la fonction serverless en vie après l'envoi de la réponse ;
-    // une promesse non attendue serait gelée par Vercel dès la réponse partie.
-    after(() => processIngestJob(job.id, {
-      topicId,
-      title,
-      author,
-      apiKey,
-      chunks,
-      maxDifficultyLevel: topic.maxDifficultyLevel,
-    }));
+    // Mode pas-à-pas piloté par le client : prépare le BookReference, le Quiz
+    // et le plan pédagogique en quelques secondes, puis renvoie les extraits au
+    // client qui appellera PUT /api/admin/ingest-pdf extrait par extrait.
+    if (mode === 'step') {
+      const ai = new GoogleGenAI({ apiKey });
+      const [plan, { bookId, quizId }] = await Promise.all([
+        generatePlan(ai, chunks, title, author, topic.maxDifficultyLevel),
+        ensureBookAndQuiz({ bookId: bookIdParam, title, author, topicId, ownerId }),
+      ]);
+      const planEntries = plan ? Array.from(plan.values()) : [];
+
+      await prisma.ingestJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'RUNNING',
+          message: plan ? 'Planification prête — génération extrait par extrait…' : 'Génération extrait par extrait…',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        mode: 'step',
+        jobId: job.id,
+        bookId,
+        quizId,
+        maxDifficultyLevel: topic.maxDifficultyLevel,
+        totalChunks: chunks.length,
+        chunks,
+        plan: planEntries,
+      });
+    }
+
+    after(() =>
+      processIngestJob(job.id, {
+        topicId,
+        bookId: bookIdParam,
+        title,
+        author,
+        apiKey,
+        chunks,
+        maxDifficultyLevel: topic.maxDifficultyLevel,
+        ownerId,
+      })
+    );
 
     return NextResponse.json({ success: true, jobId: job.id, totalChunks: chunks.length });
   } catch (error) {
@@ -468,15 +570,177 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * Exécute la génération et la sauvegarde immédiate en base d'UN SEUL extrait
+ * (chunk). Chaque requête dure ~8 à 15s, évitant tout timeout Serverless même
+ * sur le plan gratuit de Vercel (60s max).
+ */
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      jobId,
+      bookId,
+      quizId,
+      topicId,
+      title = 'Livre sans titre',
+      author = 'Auteur inconnu',
+      maxDifficultyLevel = 3,
+      totalChunks = 1,
+      chunk,
+      plan = [],
+      prevGenerated,
+      isLastChunk = false,
+      apiKey: bodyApiKey,
+    } = body as {
+      jobId: string;
+      bookId: string;
+      quizId: string;
+      topicId: string;
+      title?: string;
+      author?: string;
+      maxDifficultyLevel?: number;
+      totalChunks?: number;
+      chunk: { content: string; index: number };
+      plan?: PlanEntry[];
+      prevGenerated?: { title: string; concepts: string[] };
+      isLastChunk?: boolean;
+      apiKey?: string;
+    };
+
+    const apiKey = bodyApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Clé API Gemini manquante.' }, { status: 400 });
+    }
+    if (!jobId || !bookId || !quizId || !topicId || !chunk?.content) {
+      return NextResponse.json({ error: "Paramètres d'extrait incomplets." }, { status: 400 });
+    }
+
+    // Le client renvoie jobId/topicId/quizId/bookId à chaque extrait : on
+    // vérifie qu'ils appartiennent bien au profil connecté et vont ensemble.
+    const session = await getSessionContext();
+    const [job, stepTopic, quiz, book] = await Promise.all([
+      prisma.ingestJob.findUnique({ where: { id: jobId }, select: { ownerId: true } }),
+      prisma.topic.findUnique({ where: { id: topicId }, select: { ownerId: true } }),
+      prisma.quiz.findUnique({ where: { id: quizId }, select: { topicId: true } }),
+      prisma.bookReference.findUnique({ where: { id: bookId }, select: { ownerId: true } }),
+    ]);
+    if (!job || !stepTopic || !quiz || !book) {
+      return NextResponse.json({ error: 'Génération introuvable.' }, { status: 404 });
+    }
+    if (
+      !canWrite(session, job.ownerId) ||
+      !canWrite(session, stepTopic.ownerId) ||
+      !canWrite(session, book.ownerId) ||
+      quiz.topicId !== topicId
+    ) {
+      return NextResponse.json({ error: 'Accès refusé à cette génération.' }, { status: 403 });
+    }
+
+    const planMap = new Map<number, PlanEntry>();
+    for (const p of Array.isArray(plan) ? plan : []) {
+      if (p && typeof p.dayNumber === 'number') planMap.set(p.dayNumber, p);
+    }
+    const planOverview = formatPlanOverview(Array.from(planMap.values()));
+    const planEntry = planMap.get(chunk.index);
+    const difficultyLevel =
+      planEntry?.difficultyLevel ??
+      Math.max(1, Math.min(maxDifficultyLevel, Math.ceil((chunk.index / Math.max(1, totalChunks)) * maxDifficultyLevel)));
+    const context = {
+      current: planEntry,
+      prev: planMap.get(chunk.index - 1),
+      next: planMap.get(chunk.index + 1),
+    };
+
+    const ai = new GoogleGenAI({ apiKey });
+    let lessonsSaved = 0;
+    let questionsSaved = 0;
+    let nextPrevGenerated = prevGenerated;
+    let chunkError: string | null = null;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: GENERATION_MODEL,
+        contents: lessonPrompt(chunk, title, author, totalChunks, difficultyLevel, context, planOverview, prevGenerated),
+      });
+      const { lessons, quizQuestions } = parseAiJson(response.text || '');
+      const saved = await persistChunkOutput({
+        topicId,
+        bookId,
+        quizId,
+        title,
+        dayNumber: chunk.index,
+        difficultyLevel,
+        lessons,
+        quizQuestions,
+      });
+      lessonsSaved = saved.lessonsSaved;
+      questionsSaved = saved.questionsSaved;
+
+      const theoryLesson = lessons.find((l) => (l.keyConcepts || []).length > 0);
+      if (theoryLesson) {
+        nextPrevGenerated = {
+          title: theoryLesson.title,
+          concepts: (theoryLesson.keyConcepts || []).filter((c) => typeof c === 'string'),
+        };
+      }
+    } catch (err) {
+      chunkError = err instanceof Error ? err.message : 'Erreur IA sur cet extrait';
+      console.error(`[ingest-pdf PUT] Échec sur l'extrait ${chunk.index}/${totalChunks} :`, err);
+    }
+
+    const currentJob = await prisma.ingestJob.findUnique({ where: { id: jobId } });
+    const newLessonsTotal = (currentJob?.lessonsCreated || 0) + lessonsSaved;
+    const newQuestionsTotal = (currentJob?.questionsCreated || 0) + questionsSaved;
+    const processedChunks = Math.max(currentJob?.processedChunks || 0, chunk.index);
+
+    const isDone = isLastChunk || processedChunks >= totalChunks;
+    const finalStatus = isDone ? (newLessonsTotal > 0 ? 'DONE' : 'ERROR') : 'RUNNING';
+    const message = isDone
+      ? newLessonsTotal > 0
+        ? `${newLessonsTotal} leçon(s) et ${newQuestionsTotal} question(s) créées.`
+        : "La génération IA a échoué pour tous les extraits."
+      : `Extrait ${processedChunks}/${totalChunks} traité…`;
+
+    const updatedJob = await prisma.ingestJob.update({
+      where: { id: jobId },
+      data: {
+        status: finalStatus,
+        processedChunks,
+        lessonsCreated: newLessonsTotal,
+        questionsCreated: newQuestionsTotal,
+        message,
+      },
+    });
+
+    return NextResponse.json({
+      success: !chunkError,
+      chunkError,
+      lessonsAdded: lessonsSaved,
+      questionsAdded: questionsSaved,
+      prevGenerated: nextPrevGenerated,
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error('Error in PUT /api/admin/ingest-pdf:', error);
+    return NextResponse.json({ error: "Échec du traitement de l'extrait." }, { status: 500 });
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
+  const session = await getSessionContext();
   if (!jobId) {
-    const jobs = await prisma.ingestJob.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
+    const jobs = await prisma.ingestJob.findMany({
+      where: session.isAdmin ? undefined : { ownerId: session.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
     return NextResponse.json({ jobs });
   }
   const job = await prisma.ingestJob.findUnique({ where: { id: jobId } });
-  if (!job) {
+  if (!job || !canWrite(session, job.ownerId)) {
     return NextResponse.json({ error: 'Tâche introuvable' }, { status: 404 });
   }
   return NextResponse.json(job);

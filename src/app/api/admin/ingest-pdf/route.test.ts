@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { chunkText } from '@/lib/ingestion';
-import { stripJsonFence } from './route';
+import { chunkText, isPdfBuffer } from '@/lib/ingestion';
+import { stripJsonFence, formatPlanOverview, parseAiJson } from './route';
 
 describe('chunkText', () => {
   it('returns no chunks for empty text', () => {
@@ -35,7 +35,15 @@ describe('chunkText', () => {
   });
 });
 
-describe('stripJsonFence', () => {
+describe('isPdfBuffer', () => {
+  it('detects valid PDF header %PDF-', () => {
+    expect(isPdfBuffer(Buffer.from('%PDF-1.7 sample'))).toBe(true);
+    expect(isPdfBuffer(Buffer.from('Hello world'))).toBe(false);
+    expect(isPdfBuffer(Buffer.from('%PDF'))).toBe(false);
+  });
+});
+
+describe('stripJsonFence & parseAiJson & formatPlanOverview', () => {
   it('removes a ```json fence around the payload', () => {
     const input = '```json\n{"a":1}\n```';
     expect(stripJsonFence(input)).toBe('{"a":1}');
@@ -48,5 +56,19 @@ describe('stripJsonFence', () => {
 
   it('leaves unfenced JSON untouched (aside from trimming)', () => {
     expect(stripJsonFence('  {"a":1}  ')).toBe('{"a":1}');
+  });
+
+  it('parses AI JSON lessons and quizQuestions safely', () => {
+    const parsed = parseAiJson('```json\n{"lessons":[{"title":"L1"}],"quizQuestions":[]}\n```');
+    expect(parsed.lessons).toHaveLength(1);
+    expect(parsed.quizQuestions).toEqual([]);
+  });
+
+  it('formats plan overview in dayNumber order', () => {
+    const overview = formatPlanOverview([
+      { dayNumber: 2, title: 'Suivant', objective: 'Obj 2', difficultyLevel: 2 },
+      { dayNumber: 1, title: 'Intro', objective: 'Obj 1', difficultyLevel: 1 },
+    ]);
+    expect(overview).toBe('- Jour 1 : Intro (Obj 1)\n- Jour 2 : Suivant (Obj 2)');
   });
 });
