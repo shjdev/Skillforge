@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { useNotificationScheduler } from '@/hooks/useNotificationScheduler';
+import { Toaster } from '@/components/ui/toast';
 
 export function ClientShell({
   children,
@@ -35,5 +36,10 @@ export function ClientShell({
       .catch((err) => console.error('Failed to sync profile:', err));
   }, [setUserProfile]);
 
-  return <QueryProvider>{children}</QueryProvider>;
+  return (
+    <QueryProvider>
+      {children}
+      <Toaster />
+    </QueryProvider>
+  );
 }

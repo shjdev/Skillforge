@@ -1,0 +1,18 @@
+# Base PostgreSQL locale pour le développement (jamais la prod).
+# Démarrer : docker compose up -d   ·   Arrêter : docker compose down
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: skillforge_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: skillforge
+      POSTGRES_PASSWORD: skillforge
+      POSTGRES_DB: skillforge
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - skillforge_db:/var/lib/postgresql/data
+
+volumes:
+  skillforge_db:
