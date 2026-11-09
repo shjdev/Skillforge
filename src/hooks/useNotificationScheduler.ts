@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { useAppStore } from '@/stores/useAppStore';
+import { useProfile } from '@/hooks/useProfile';
 import { resolveDueReminder } from '@/lib/notifications';
 
 const emptySubscribe = () => () => {};
@@ -42,7 +42,7 @@ function fireNotification(title: string, body: string) {
  * to avoid firing the same reminder twice.
  */
 export function useNotificationScheduler() {
-  const userProfile = useAppStore((state) => state.userProfile);
+  const { data: userProfile } = useProfile();
   const profileRef = useRef(userProfile);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export function useNotificationScheduler() {
 
     const check = () => {
       const profile = profileRef.current;
-      if (!profile) return;
+      if (!profile?.reminders) return;
 
       const firedKeys = new Set<string>();
       if (localStorage.getItem(todayKey('single'))) firedKeys.add('single');

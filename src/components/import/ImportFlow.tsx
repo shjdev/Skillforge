@@ -13,7 +13,8 @@ import { useMe } from '@/hooks/useMe';
 import { fetchJson } from '@/lib/api';
 import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
 import { plural } from '@/lib/format';
-import { getUploadMode, importHeaders, readPersonalKey, startImport } from '@/lib/import/upload-client';
+import { getUploadMode, importHeaders, startImport } from '@/lib/import/upload-client';
+import { usePersonalKey } from '@/hooks/usePersonalKey';
 import { FileStep, formatBytes } from './FileStep';
 import { ImportStepper } from './ImportStepper';
 import { ReviewStep, type ReviewValues } from './ReviewStep';
@@ -35,7 +36,7 @@ export function ImportFlow() {
   const queryClient = useQueryClient();
   const jobId = useSearchParams().get('job');
   const me = useMe();
-  const [personalKey] = React.useState(() => Boolean(readPersonalKey()));
+  const personalKey = Boolean(usePersonalKey());
 
   const overview = useQuery({
     queryKey: OVERVIEW_KEY,

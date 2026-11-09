@@ -269,6 +269,6 @@ Vercel testé ; fusion dans `main` et prod migrée.
 | 2 Import | Fait : pipeline + écran d'import, vérifié sur un vrai PDF (analyse 4 thèmes / 14 jours, génération jour par jour) |
 | 3 Bibliothèque | Fait : liste, détail, modification, suppression |
 | 4 Apprentissage | Fait : Aujourd'hui, thème, leçons, quiz (échec puis réussite vérifiés) |
-| 5 Révision, stats, réglages | À faire |
+| 5 Révision, stats, réglages | Fait : recherche dans les leçons faites, statistiques 30 jours, réglages (profil, rythme, rappels, clé Gemini, mot de passe) |
 | 6 Admin | À faire |
 | 7 Nettoyage et mise en ligne | À faire |

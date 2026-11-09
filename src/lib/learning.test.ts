@@ -91,3 +91,14 @@ describe('scoreQuiz', () => {
     expect(scoreQuiz([], {}, 80).passed).toBe(false);
   });
 });
+
+describe('snippetAround', () => {
+  it('returns plain text around the match', async () => {
+    const { snippetAround } = await import('./learn');
+    const md = '## Titre\n\n' + 'mot '.repeat(60) + '**adresse IP** suite ' + 'fin '.repeat(60);
+    const s = snippetAround(md, 'adresse ip', 20);
+    expect(s).toContain('adresse IP');
+    expect(s.startsWith('…')).toBe(true);
+    expect(s).not.toContain('**');
+  });
+});

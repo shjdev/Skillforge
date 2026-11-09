@@ -14,11 +14,11 @@ import { DayList, type Selection } from './DayList';
 import { LessonPanel } from './LessonPanel';
 import { QuizPanel } from './QuizPanel';
 
-export function LearnView({ slug }: { slug: string }) {
+export function LearnView({ slug, initialLessonId }: { slug: string; initialLessonId?: string }) {
   const queryClient = useQueryClient();
   const topicKey = ['topic', slug];
   const query = useQuery({ queryKey: topicKey, queryFn: () => fetchJson<TopicView>(`/api/topics/${slug}`) });
-  const [selection, setSelection] = React.useState<Selection | null>(null);
+  const [selection, setSelection] = React.useState<Selection | null>(initialLessonId ? { kind: 'lesson', id: initialLessonId } : null);
   const [showOutline, setShowOutline] = React.useState(false);
 
   const refreshAround = () => {

@@ -1,54 +1,15 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getCurrentUserId } from '@/lib/serverAuth';
+import { getSessionContext } from '@/lib/serverAuth';
+import { errorResponse } from '@/lib/http';
+import { getRevision } from '@/lib/learn';
 
-export async function GET() {
+/** Leçons faites, avec recherche facultative (?q=). */
+export async function GET(request: Request) {
   try {
-    const userId = await getCurrentUserId();
-    const sessions = await prisma.userSession.findMany({
-      where: { userId, completed: true },
-      orderBy: { completedAt: 'desc' },
-      take: 200,
-      include: {
-        lesson: {
-          include: {
-            topic: { select: { id: true, name: true, domain: { select: { id: true, name: true, color: true } } } },
-            bookReference: { select: { title: true, author: true } },
-          },
-        },
-      },
-    });
-
-    // Déduplication : une leçon peut avoir été validée plusieurs fois.
-    const seen = new Set<string>();
-    const lessons = [];
-    for (const s of sessions) {
-      if (seen.has(s.lessonId)) continue;
-      seen.add(s.lessonId);
-      let concepts: string[] = [];
-      try {
-        concepts = JSON.parse(s.lesson.keyConcepts || '[]');
-      } catch {
-        concepts = [];
-      }
-      lessons.push({
-        lessonId: s.lesson.id,
-        title: s.lesson.title,
-        dayNumber: s.lesson.dayNumber,
-        chapterCitation: s.lesson.chapterCitation,
-        bookTitle: s.lesson.bookReference?.title || null,
-        concepts,
-        note: s.notes || null,
-        topicName: s.lesson.topic.name,
-        domainName: s.lesson.topic.domain.name,
-        domainColor: s.lesson.topic.domain.color,
-        completedAt: s.completedAt,
-      });
-    }
-
-    return NextResponse.json({ lessons });
-  } catch (error) {
-    console.error('Error fetching revision data:', error);
-    return NextResponse.json({ error: 'Échec du chargement des révisions' }, { status: 500 });
+    const { userId } = await getSessionContext();
+    const q = new URL(request.url).searchParams.get('q') ?? undefined;
+    return NextResponse.json(await getRevision(userId, q));
+  } catch (err) {
+    return errorResponse(err);
   }
 }

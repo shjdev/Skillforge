@@ -375,3 +375,72 @@ export async function getToday(userId: string) {
 }
 
 export type TodayView = Awaited<ReturnType<typeof getToday>>;
+
+// ─── Révision ───────────────────────────────────────────────────────────────
+
+/** Extrait autour du premier passage contenant `q` (texte brut, sans markdown). */
+export function snippetAround(markdown: string, q: string, radius = 90): string {
+  const text = markdown.replace(/[#*_`>]+/g, '').replace(/\s+/g, ' ').trim();
+  const at = text.toLowerCase().indexOf(q.toLowerCase());
+  if (at < 0) return text.slice(0, radius * 2) + (text.length > radius * 2 ? '…' : '');
+  const start = Math.max(0, at - radius);
+  const end = Math.min(text.length, at + q.length + radius);
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
+}
+
+/**
+ * Leçons déjà faites, les plus récentes d'abord, regroupées par thème.
+ * Avec `q`, cherche dans le titre et le contenu.
+ */
+export async function getRevision(userId: string, q?: string) {
+  const query = q?.trim().slice(0, 100) || '';
+  const sessions = await prisma.userSession.findMany({
+    where: {
+      userId,
+      completed: true,
+      ...(query
+        ? {
+            lesson: {
+              OR: [
+                { title: { contains: query, mode: 'insensitive' } },
+                { contentMd: { contains: query, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    },
+    orderBy: { completedAt: 'desc' },
+    distinct: ['lessonId'],
+    take: 200,
+    select: {
+      completedAt: true,
+      lesson: {
+        select: {
+          id: true,
+          title: true,
+          dayNumber: true,
+          sessionType: true,
+          keyConcepts: true,
+          contentMd: Boolean(query),
+          topic: { select: { slug: true, name: true, book: { select: { title: true } } } },
+        },
+      },
+    },
+  });
+
+  return {
+    query,
+    lessons: sessions.map((s) => ({
+      id: s.lesson.id,
+      title: s.lesson.title,
+      dayNumber: s.lesson.dayNumber,
+      sessionType: s.lesson.sessionType,
+      concepts: strings(s.lesson.keyConcepts).slice(0, 6),
+      snippet: query && 'contentMd' in s.lesson ? snippetAround(String(s.lesson.contentMd), query) : null,
+      topic: { slug: s.lesson.topic.slug, name: s.lesson.topic.name, bookTitle: s.lesson.topic.book.title },
+      completedAt: s.completedAt?.toISOString() ?? null,
+    })),
+  };
+}
+
+export type RevisionView = Awaited<ReturnType<typeof getRevision>>;
