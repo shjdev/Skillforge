@@ -93,6 +93,7 @@ ${chunk}
 - Leçon 1 (sessionType "MORNING") — comprendre. Markdown avec : "## Introduction" (pourquoi ce sujet compte, 2-3 phrases), "## L'essentiel" (au moins 3 sous-parties "###", chacune expliquée en profondeur avec un exemple concret), "## Pièges courants", "## À retenir" (liste courte). Au moins 700 mots en paragraphes rédigés.
 - Leçon 2 (sessionType "EVENING") — pratiquer. Un exercice ou un cas concret lié à la leçon 1 : "## Énoncé", "## Résolution guidée" (étapes numérotées), "## Correction commentée" (pourquoi chaque étape est juste). Au moins 400 mots.
 - Niveau de difficulté du jour : ${difficulty}/5 (1 = vocabulaire simple, aucun prérequis ; 3 = intermédiaire ; 5 = expert, cas limites). Adapte le vocabulaire et la profondeur.
+- Markdown simple : titres, paragraphes, listes, gras, blocs de code. Pas de tableau ni de HTML.
 - Quand un terme technique a un équivalent anglais courant, indique-le entre parenthèses la première fois.
 - Reste fidèle à l'extrait ; n'invente pas de faits absents du document. Cite le chapitre ou les pages si l'extrait les mentionne.
 - Puis écris 3 questions de quiz à choix multiple (4 options) sur CE jour uniquement. "correctAnswer" doit être recopié à l'identique depuis "options".

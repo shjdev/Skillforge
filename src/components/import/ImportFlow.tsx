@@ -11,7 +11,7 @@ import { EmptyState, Notice, ProgressBar, Skeleton } from '@/components/ui/feedb
 import { toast } from '@/components/ui/toast';
 import { useMe } from '@/hooks/useMe';
 import { fetchJson } from '@/lib/api';
-import { toErrorMessage } from '@/lib/errors';
+import { parseJsonResponse, toErrorMessage } from '@/lib/errors';
 import { plural } from '@/lib/format';
 import { getUploadMode, importHeaders, readPersonalKey, startImport } from '@/lib/import/upload-client';
 import { FileStep, formatBytes } from './FileStep';
@@ -24,6 +24,9 @@ const OVERVIEW_KEY = ['imports'] as const;
 const jobKey = (id: string | null) => ['import', id] as const;
 /** Appels sans progrès d'affilée avant de mettre en pause (clé invalide, quota IA…). */
 const MAX_STALLS = 3;
+/** Attentes successives quand l'IA est surchargée (secondes), puis pause. */
+const BUSY_DELAYS_S = [15, 30, 45, 60];
+const MAX_BUSY_RETRIES = 8;
 
 type JobResponse = { job: ImportJob };
 
@@ -109,14 +112,23 @@ export function ImportFlow() {
     let stopped = false;
     (async () => {
       let stalls = 0;
+      let busyRetries = 0;
       let current = jobRef.current!;
       while (!stopped && current.status === 'GENERATING') {
         try {
-          const { job: next } = await fetchJson<JobResponse>(`/api/imports/${current.id}/step`, {
-            method: 'POST',
-            headers: importHeaders(),
-          });
+          const res = await fetch(`/api/imports/${current.id}/step`, { method: 'POST', headers: importHeaders() });
+          // IA surchargée : rien n'est perdu, on attend puis on réessaie.
+          if (res.status === 503 && busyRetries < MAX_BUSY_RETRIES) {
+            const { error } = (await res.json().catch(() => ({}))) as { error?: string };
+            const delay = BUSY_DELAYS_S[Math.min(busyRetries, BUSY_DELAYS_S.length - 1)];
+            busyRetries++;
+            setStepError(`${error || 'L’IA est très sollicitée.'} Nouvel essai dans ${delay} s.`);
+            await new Promise((resolve) => setTimeout(resolve, delay * 1000));
+            continue;
+          }
+          const { job: next } = await parseJsonResponse<JobResponse>(res, 'La génération a échoué.');
           if (stopped) return;
+          busyRetries = 0;
           stalls = next.progress.done > current.progress.done ? 0 : stalls + 1;
           setJob(next);
           setStepError(next.error);

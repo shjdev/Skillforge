@@ -67,3 +67,27 @@ describe('XP constants', () => {
     expect(XP_PER_QUIZ_PASS).toBeGreaterThan(0);
   });
 });
+
+describe('nextStreak', () => {
+  it('keeps, extends or restarts the streak', async () => {
+    const { nextStreak } = await import('./learning');
+    expect(nextStreak('2026-11-09', 4, '2026-11-09', '2026-11-08')).toBe(4);
+    expect(nextStreak('2026-11-09', 0, '2026-11-09', '2026-11-08')).toBe(1);
+    expect(nextStreak('2026-11-08', 4, '2026-11-09', '2026-11-08')).toBe(5);
+    expect(nextStreak('2026-11-01', 4, '2026-11-09', '2026-11-08')).toBe(1);
+    expect(nextStreak(null, 0, '2026-11-09', '2026-11-08')).toBe(1);
+  });
+});
+
+describe('scoreQuiz', () => {
+  it('scores answers against the passing threshold', async () => {
+    const { scoreQuiz } = await import('./learning');
+    const qs = [
+      { id: 'a', points: 10, correctAnswer: 'x' },
+      { id: 'b', points: 10, correctAnswer: 'y' },
+    ];
+    expect(scoreQuiz(qs, { a: 'x', b: 'y' }, 80)).toMatchObject({ score: 20, percentage: 100, passed: true });
+    expect(scoreQuiz(qs, { a: 'x', b: 'z' }, 80)).toMatchObject({ score: 10, percentage: 50, passed: false, correct: { a: true, b: false } });
+    expect(scoreQuiz([], {}, 80).passed).toBe(false);
+  });
+});

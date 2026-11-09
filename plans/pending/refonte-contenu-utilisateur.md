@@ -244,6 +244,9 @@ Vercel testé ; fusion dans `main` et prod migrée.
 | Accès au contenu | Strictement réservé au propriétaire, admin compris (ownership.ts supprimé) | Chacun ne voit que ses livres ; règle unique et simple. |
 | Fichier importé | Déposé sous imports/<userId>/ sur Vercel Blob, relu puis supprimé par le serveur | Plus de suppression côté client non authentifiée ; un utilisateur ne peut pas importer le fichier d'un autre. |
 | Clé Gemini personnelle | Gardée dans le navigateur, envoyée en en-tête, jamais stockée | Pas de secret utilisateur en base. |
+| Surcharge Gemini (503) | Nouvel essai avec pause, puis modèle de secours (gemini-3.5-flash) ; côté navigateur, attente puis reprise ; jamais compté comme un échec | Vu en test : une surcharge passagère faisait sauter des jours. |
+| Ordre des réponses du quiz | Mélangé à l'enregistrement | Vu en test : l'IA plaçait la bonne réponse au 2e rang 8 fois sur 12. |
+| Adresse d'un thème | Nom du thème seul (suffixe si doublon) | Les adresses « livre + thème » étaient trop longues. |
 
 ## Pas encore spécifié
 
@@ -264,8 +267,8 @@ Vercel testé ; fusion dans `main` et prod migrée.
 | 0 Fondations | Fait (1d0e0ca) |
 | 1 Modèle de données | Fait : schéma appliqué en local, anciennes routes supprimées |
 | 2 Import | Fait : pipeline + écran d'import, vérifié sur un vrai PDF (analyse 4 thèmes / 14 jours, génération jour par jour) |
-| 3 Bibliothèque | À faire |
-| 4 Apprentissage | À faire |
+| 3 Bibliothèque | Fait : liste, détail, modification, suppression |
+| 4 Apprentissage | Fait : Aujourd'hui, thème, leçons, quiz (échec puis réussite vérifiés) |
 | 5 Révision, stats, réglages | À faire |
 | 6 Admin | À faire |
 | 7 Nettoyage et mise en ligne | À faire |

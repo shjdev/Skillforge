@@ -1,3 +1,4 @@
+import { AppError } from '@/lib/app-error';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ensureUserProfile, getSessionContext } from '@/lib/serverAuth';
@@ -5,7 +6,7 @@ import { errorResponse, personalKeyFrom } from '@/lib/http';
 import { resolveApiKey } from '@/lib/import/gemini';
 import { assertOwnBlobUrl, deleteBlob, fetchBlobBuffer, isBlobConfigured } from '@/lib/import/blob';
 import { quotaStatus, quotaWindowStart } from '@/lib/import/quota';
-import { ACTIVE_STATUSES, ImportError, createImport, serializeJob } from '@/lib/import/service';
+import { ACTIVE_STATUSES, createImport, serializeJob } from '@/lib/import/service';
 import { MAX_FILE_BYTES, detectFormat } from '@/lib/import/text';
 
 // Extraction + analyse IA dans la même requête : peut prendre plusieurs minutes.
@@ -51,11 +52,11 @@ export async function POST(request: Request) {
     await ensureUserProfile(userId);
 
     const { apiKey, personal } = resolveApiKey(personalKeyFrom(request));
-    if (!apiKey) throw new ImportError('Aucune clé IA disponible : ajoutez votre clé Gemini dans les réglages.', 503);
+    if (!apiKey) throw new AppError('Aucune clé IA disponible : ajoutez votre clé Gemini dans les réglages.', 503);
 
     const quota = await quotaFor(userId, isAdmin, personal);
     if (!quota.allowed) {
-      throw new ImportError(
+      throw new AppError(
         `Limite atteinte : ${quota.limit} imports par 24 h. Réessayez plus tard, ou ajoutez votre propre clé Gemini dans les réglages.`,
         429,
       );
@@ -65,35 +66,35 @@ export async function POST(request: Request) {
     let buffer: Buffer;
     const contentType = request.headers.get('content-type') ?? '';
     if (contentType.includes('multipart/form-data')) {
-      if (isBlobConfigured()) throw new ImportError("Envoyez le fichier via le stockage de l'application.");
+      if (isBlobConfigured()) throw new AppError("Envoyez le fichier via le stockage de l'application.");
       const form = await request.formData();
       const file = form.get('file');
-      if (!(file instanceof File)) throw new ImportError('Aucun fichier reçu.');
-      if (file.size > MAX_FILE_BYTES) throw new ImportError('Fichier trop volumineux (40 Mo maximum).', 413);
+      if (!(file instanceof File)) throw new AppError('Aucun fichier reçu.');
+      if (file.size > MAX_FILE_BYTES) throw new AppError('Fichier trop volumineux (40 Mo maximum).', 413);
       fileName = file.name;
       buffer = Buffer.from(await file.arrayBuffer());
     } else {
       const body = (await request.json().catch(() => ({}))) as { fileUrl?: unknown; fileName?: unknown };
       if (typeof body.fileUrl !== 'string' || typeof body.fileName !== 'string') {
-        throw new ImportError('Fichier manquant.');
+        throw new AppError('Fichier manquant.');
       }
       try {
         assertOwnBlobUrl(body.fileUrl, userId);
       } catch (err) {
-        throw new ImportError((err as Error).message, 403);
+        throw new AppError((err as Error).message, 403);
       }
       blobUrl = body.fileUrl;
       fileName = body.fileName;
       try {
         buffer = await fetchBlobBuffer(body.fileUrl);
       } catch (err) {
-        throw new ImportError((err as Error).message, 404);
+        throw new AppError((err as Error).message, 404);
       }
-      if (buffer.length > MAX_FILE_BYTES) throw new ImportError('Fichier trop volumineux (40 Mo maximum).', 413);
+      if (buffer.length > MAX_FILE_BYTES) throw new AppError('Fichier trop volumineux (40 Mo maximum).', 413);
     }
 
     if (!detectFormat(fileName, buffer)) {
-      throw new ImportError('Format non pris en charge : importez un fichier PDF, TXT ou Markdown.');
+      throw new AppError('Format non pris en charge : importez un fichier PDF, TXT ou Markdown.');
     }
 
     const job = await createImport({ ownerId: userId, fileName, fileSize: buffer.length, buffer, apiKey });

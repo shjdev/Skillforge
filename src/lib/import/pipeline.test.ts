@@ -5,7 +5,7 @@ import { parseAnalysis, parseChunkOutput, MIN_LESSON_CHARS } from './schemas';
 import { MAX_CHUNKS, chunkSizeFor, chunkText, detectFormat } from './text';
 import { assertOwnBlobUrl } from './blob';
 import { analysisPrompt, lessonPrompt } from './prompts';
-import { estimateMinutes } from './service';
+import { estimateMinutes, shuffle } from './service';
 import { slugify, uniqueSlug } from '@/lib/slug';
 
 describe('queue', () => {
@@ -192,5 +192,25 @@ describe('estimateMinutes', () => {
     expect(estimateMinutes('mot '.repeat(100))).toBe(10);
     expect(estimateMinutes('mot '.repeat(3_600))).toBe(20);
     expect(estimateMinutes('mot '.repeat(50_000))).toBe(60);
+  });
+});
+
+describe('gemini errors', () => {
+  it('tells a temporary overload from a real failure', async () => {
+    const { isTransientError, describeAiError } = await import('./gemini');
+    const busy = new Error('{"error":{"code":503,"message":"This model is currently experiencing high demand.","status":"UNAVAILABLE"}}');
+    expect(isTransientError(busy)).toBe(true);
+    expect(isTransientError(new SyntaxError('Unexpected token'))).toBe(false);
+    expect(isTransientError(new Error('{"error":{"code":400,"message":"API key not valid"}}'))).toBe(false);
+    expect(describeAiError(new Error('API key not valid. API_KEY_INVALID'))).toBe('Clé Gemini invalide.');
+    expect(describeAiError(busy)).toMatch(/sollicitée/);
+  });
+});
+
+describe('shuffle', () => {
+  it('keeps every option exactly once', () => {
+    const out = shuffle(['a', 'b', 'c', 'd']);
+    expect([...out].sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(shuffle(['a', 'b', 'c'], () => 0)).toEqual(['b', 'c', 'a']);
   });
 });

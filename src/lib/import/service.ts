@@ -5,6 +5,7 @@
 import type { ImportJob, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { uniqueSlug } from '@/lib/slug';
+import { AppError } from '@/lib/app-error';
 import { AiError, generateJson } from './gemini';
 import { analysisPrompt, formatTopicOutline, lessonPrompt } from './prompts';
 import { afterFailure, buildQueue, isLastOfTopic, topicDayCount, type QueueItem } from './queue';
@@ -16,15 +17,6 @@ const STALE_ANALYSIS_MS = 6 * 60 * 1000;
 
 export const ACTIVE_STATUSES = ['ANALYZING', 'REVIEW', 'GENERATING'] as const;
 
-/** Erreur à montrer telle quelle (fichier refusé, état invalide…). */
-export class ImportError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
 
 interface LastGenerated {
   topicId: string;
@@ -73,7 +65,7 @@ export type ImportJobView = ReturnType<typeof serializeJob>;
 
 export async function getOwnJob(jobId: string, ownerId: string): Promise<ImportJob> {
   const job = await prisma.importJob.findFirst({ where: { id: jobId, ownerId } });
-  if (!job) throw new ImportError('Import introuvable.', 404);
+  if (!job) throw new AppError('Import introuvable.', 404);
   return job;
 }
 
@@ -98,7 +90,7 @@ export async function createImport(params: {
   try {
     const text = await extractText(fileName, buffer, { apiKey });
     if (text.replace(/\s+/g, '').length < MIN_TEXT_CHARS) {
-      throw new ImportError('Le document contient trop peu de texte pour en faire un parcours.');
+      throw new AppError('Le document contient trop peu de texte pour en faire un parcours.');
     }
     const chunks = chunkText(text);
     const categories = await prisma.category.findMany({ where: { ownerId }, select: { name: true } });
@@ -122,7 +114,12 @@ export async function createImport(params: {
           },
     });
   } catch (err) {
-    const message = err instanceof ImportError || err instanceof AiError || err instanceof Error ? err.message : '';
+    const message =
+      err instanceof AiError && err.transient
+        ? "L'IA est très sollicitée en ce moment : relancez l'import dans quelques minutes (il ne compte pas dans votre limite)."
+        : err instanceof Error
+          ? err.message
+          : '';
     console.error('[import] Analyse impossible :', err);
     return prisma.importJob.update({
       where: { id: job.id },
@@ -144,7 +141,7 @@ export interface ConfirmEdits {
 /** Crée le livre, ses thèmes et leurs quiz, puis lance la génération. */
 export async function confirmImport(jobId: string, ownerId: string, edits: ConfirmEdits): Promise<ImportJob> {
   const job = await getOwnJob(jobId, ownerId);
-  if (job.status !== 'REVIEW') throw new ImportError("Cet import n'attend pas de validation.", 409);
+  if (job.status !== 'REVIEW') throw new AppError("Cet import n'attend pas de validation.", 409);
   const analysis = job.analysis as unknown as BookAnalysis;
 
   const clean = (value: string | undefined, fallback: string, max: number) => (value?.trim() || fallback).slice(0, max);
@@ -158,7 +155,7 @@ export async function confirmImport(jobId: string, ownerId: string, edits: Confi
       where: { id: job.id, status: 'REVIEW' },
       data: { status: 'GENERATING' },
     });
-    if (claimed.count === 0) throw new ImportError('Cet import est déjà lancé.', 409);
+    if (claimed.count === 0) throw new AppError('Cet import est déjà lancé.', 409);
 
     const category = await tx.category.upsert({
       where: { ownerId_name: { ownerId, name: categoryName } },
@@ -178,7 +175,7 @@ export async function confirmImport(jobId: string, ownerId: string, edits: Confi
         data: {
           ownerId,
           bookId: book.id,
-          slug: uniqueSlug(`${title} ${name}`, taken),
+          slug: uniqueSlug(name, taken),
           name,
           description: t.description,
           position: i + 1,
@@ -246,6 +243,11 @@ export async function runStep(jobId: string, ownerId: string, apiKey: string): P
       parseChunkOutput,
     );
   } catch (err) {
+    // Surcharge passagère : rien n'est compté, le navigateur réessaie plus tard.
+    if (err instanceof AiError && err.transient) {
+      await prisma.importJob.update({ where: { id: job.id }, data: { error: err.message } });
+      throw err;
+    }
     return recordFailure(job, err);
   }
 
@@ -290,7 +292,8 @@ export async function runStep(jobId: string, ownerId: string, apiKey: string): P
           quizId: topic.quiz!.id,
           dayNumber: item.dayNumber,
           questionText: q.questionText,
-          options: json(q.options),
+          // L'IA place souvent la bonne réponse au même rang : on mélange.
+          options: json(shuffle(q.options)),
           correctAnswer: q.correctAnswer,
           explanation: q.explanation,
         })),
@@ -388,6 +391,16 @@ export async function cancelImport(jobId: string, ownerId: string): Promise<Impo
   const job = await getOwnJob(jobId, ownerId);
   if (!ACTIVE_STATUSES.includes(job.status as (typeof ACTIVE_STATUSES)[number])) return job;
   return finalizeImport(job.id, 'CANCELLED');
+}
+
+/** Mélange de Fisher-Yates (copie). */
+export function shuffle<T>(items: T[], random = Math.random): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /** Durée de lecture estimée : ~180 mots par minute, entre 10 et 60 min. */
