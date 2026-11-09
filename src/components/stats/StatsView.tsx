@@ -10,6 +10,8 @@ import { fetchJson } from '@/lib/api';
 import { toErrorMessage } from '@/lib/errors';
 import { formatDuration, formatPoints } from '@/lib/format';
 import type { StatsView as Stats } from '@/lib/stats';
+import { SectionTitle } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { ActivityChart } from './ActivityChart';
 
 export function StatsView() {
@@ -43,10 +45,10 @@ export function StatsView() {
   return (
     <div className="flex flex-col gap-8">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Leçons faites" value={String(s.totals.lessons)} />
-        <Tile label="Temps d’étude" value={formatDuration(s.totals.minutes)} />
-        <Tile label="Thèmes validés" value={String(s.totals.topicsValidated)} />
-        <Tile label="Points" value={formatPoints(s.totals.points)} />
+        <StatTile label="Leçons faites" value={String(s.totals.lessons)} />
+        <StatTile label="Temps d’étude" value={formatDuration(s.totals.minutes)} />
+        <StatTile label="Thèmes validés" value={String(s.totals.topicsValidated)} />
+        <StatTile label="Points" value={formatPoints(s.totals.points)} />
       </dl>
 
       <Card>
@@ -56,10 +58,8 @@ export function StatsView() {
       </Card>
 
       {s.books.length > 0 && (
-        <section aria-labelledby="books-progress">
-          <h2 id="books-progress" className="kicker mb-3 !text-ink-2">
-            Avancement par livre
-          </h2>
+        <section>
+          <SectionTitle>Avancement par livre</SectionTitle>
           <ul className="flex flex-col divide-y divide-rule rounded-lg border border-rule bg-paper-raised">
             {s.books.map((b) => {
               const pct = b.totalLessons ? (b.doneLessons / b.totalLessons) * 100 : 0;
@@ -78,15 +78,6 @@ export function StatsView() {
           </ul>
         </section>
       )}
-    </div>
-  );
-}
-
-function Tile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-rule bg-paper-raised px-4 py-3">
-      <dt className="text-sm text-ink-3">{label}</dt>
-      <dd className="mt-1 font-serif text-3xl leading-tight">{value}</dd>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
 import { EmptyState, Notice, ProgressBar, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatTile } from '@/components/ui/stat-tile';
 import { fetchJson } from '@/lib/api';
 import { toErrorMessage } from '@/lib/errors';
 import { formatDuration, formatPoints, plural } from '@/lib/format';
@@ -43,9 +44,9 @@ export function TodayView() {
       <PageHeader kicker={todayLabel()} title={`Bonjour, ${firstName}`} />
 
       <dl className="mb-8 grid grid-cols-3 gap-3">
-        <Stat icon={<Flame />} label="Série" value={plural(t.streak, 'jour')} />
-        <Stat icon={<Sparkles />} label="Points" value={formatPoints(t.totalXp)} />
-        <Stat icon={<BookOpen />} label="Aujourd’hui" value={plural(t.doneToday, 'leçon')} />
+        <StatTile icon={<Flame />} label="Série" value={plural(t.streak, 'jour')} />
+        <StatTile icon={<Sparkles />} label="Points" value={formatPoints(t.totalXp)} />
+        <StatTile icon={<BookOpen />} label="Aujourd’hui" value={plural(t.doneToday, 'leçon')} />
       </dl>
 
       {t.imports.map((job) => (
@@ -132,18 +133,6 @@ export function TodayView() {
         </ol>
       </section>
     </>
-  );
-}
-
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-rule bg-paper-raised px-4 py-3">
-      <dt className="flex items-center gap-1.5 text-sm text-ink-3 [&_svg]:size-4 [&_svg]:text-ember">
-        {icon}
-        {label}
-      </dt>
-      <dd className="mt-1 font-serif text-2xl leading-tight">{value}</dd>
-    </div>
   );
 }
 

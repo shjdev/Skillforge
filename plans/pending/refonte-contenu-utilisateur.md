@@ -270,5 +270,5 @@ Vercel testé ; fusion dans `main` et prod migrée.
 | 3 Bibliothèque | Fait : liste, détail, modification, suppression |
 | 4 Apprentissage | Fait : Aujourd'hui, thème, leçons, quiz (échec puis réussite vérifiés) |
 | 5 Révision, stats, réglages | Fait : recherche dans les leçons faites, statistiques 30 jours, réglages (profil, rythme, rappels, clé Gemini, mot de passe) |
-| 6 Admin | À faire |
+| 6 Admin | Fait : une page /admin (profils, usage, activité), réinitialisation du mot de passe et suppression d'un profil vérifiées |
 | 7 Nettoyage et mise en ligne | À faire |

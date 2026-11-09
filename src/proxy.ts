@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE_NAME, isAdminPasswordEnabled, isAuthEnabled, parseSessionToken } from '@/lib/authGate';
 
-const ADMIN_ONLY_API_PREFIXES = [
-  '/api/admin/users',
-  '/api/admin/activity',
-  '/api/admin/export',
-  '/api/admin/quizzes',
-  '/api/admin/lessons',
-  '/api/admin/questions',
-];
+/** Toute l'API d'administration ; les routes vérifient aussi le rôle elles-mêmes. */
+const ADMIN_ONLY_API_PREFIXES = ['/api/admin/'];
 
 /**
  * Single-password gate + multi-profile support for public deployments.
