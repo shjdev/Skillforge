@@ -1,64 +1,84 @@
 # SkillForge
 
-Application d'apprentissage quotidien structuré — leçons, quiz de validation, révision espacée et suivi de progression — construite avec Next.js 16, Prisma/PostgreSQL (Neon) et Zustand. L'interface s'adapte automatiquement (responsive) entre une mise en page desktop et une mise en page mobile dédiée selon la largeur d'écran.
+Chacun importe ses propres livres (PDF, TXT, Markdown) ; l'IA en tire un parcours
+**Livre → Thèmes → Leçons** classé dans une catégorie automatique. On apprend un thème
+à la fois, jour après jour (cours le matin, pratique le soir), et un quiz valide le thème.
 
-## Démarrage
+Next.js 16, React 19, Prisma / PostgreSQL, Tailwind v4, Google Gemini, Vercel Blob.
 
-Nécessite une base [Neon](https://neon.tech) (gratuite) — créez un projet, récupérez les deux chaînes de connexion depuis Dashboard > Connect (l'une avec `-pooler` dans l'hôte pour `DATABASE_URL`, l'autre sans pour `DIRECT_URL`).
+## Démarrage en local
 
 ```bash
 npm install
-cp .env.example .env      # requis — DATABASE_URL et DIRECT_URL (Neon)
-npm run db:push           # crée les tables sur la base Neon
-npm run db:seed           # données de démonstration (domaines, thèmes, leçons)
+cp .env.example .env        # puis renseignez au moins DATABASE_URL, DIRECT_URL et GEMINI_API_KEY
+docker compose up -d        # base PostgreSQL locale (port 55432), jamais la prod
+npm run db:push             # crée les tables
 npm run dev
 ```
 
-En développement local, le plus simple est de créer une [branche Neon](https://neon.tech/docs/introduction/branching) dédiée (isolée de la production) plutôt qu'une base séparée.
+Pour la base locale : `DATABASE_URL` et `DIRECT_URL` valent
+`postgresql://skillforge:skillforge@127.0.0.1:55432/skillforge`.
 
-Ouvrez [http://localhost:3000](http://localhost:3000). Réduisez la fenêtre du navigateur (ou ouvrez depuis un téléphone) pour voir la mise en page mobile — le contenu bascule en direct selon la largeur d'écran, sans redirection ni bouton.
+Il n'y a aucun contenu préchargé : ouvrez [http://localhost:3000](http://localhost:3000)
+et importez un premier livre depuis la Bibliothèque.
 
-L'espace admin est accessible depuis la barre latérale (« ATELIER → ADMIN ») ou directement sur `/admin/dashboard`.
+## Comment marche un import
 
-## Tests
+1. Le fichier (40 Mo max) est envoyé sur Vercel Blob dans le dossier de l'utilisateur
+   (ou directement au serveur en local sans Blob), puis le texte est extrait et découpé.
+2. L'IA analyse le livre : titre, auteur, catégorie, thèmes et plan jour par jour.
+   L'utilisateur relit et corrige avant de lancer la génération.
+3. Le navigateur fait avancer la génération extrait par extrait (`/api/imports/[id]/step`).
+   Chaque étape est rejouable ; une surcharge passagère de l'IA ne compte pas comme un échec,
+   et un extrait qui échoue trois fois est ignoré. L'import peut être arrêté et repris.
+
+Quota : 3 imports par jour et par utilisateur sur la clé du serveur (`IMPORT_DAILY_LIMIT`).
+L'administrateur et toute personne qui saisit sa propre clé Gemini (Réglages) ne sont pas limités ;
+cette clé reste dans le navigateur.
+
+> La clé Gemini du serveur doit être sur un projet Google **avec facturation activée** :
+> l'offre gratuite plafonne à environ 20 requêtes par jour, alors qu'un livre en demande
+> une par jour de parcours (plus l'analyse).
+
+## Tests et vérifications
 
 ```bash
-npm run test         # suite complète (vitest)
-npm run test:watch   # mode watch
+npm run test     # vitest
+npm run lint
+npx tsc --noEmit
+npm run build
 ```
-
-## Desktop shell (notifications OS réelles)
-
-L'app peut aussi tourner dans une coquille Electron légère pour que les rappels de session déclenchent de vraies notifications de bureau au lieu des notifications navigateur. C'est un wrapper de dev uniquement — aucun packaging/installateur n'est configuré.
-
-```bash
-npm run dev        # terminal 1 — serveur Next.js
-npm run electron    # terminal 2 — fenêtre desktop
-```
-
-`electron/main.js` charge `http://localhost:3000` (réessaie tant que le serveur de dev n'est pas prêt). Le processus principal interroge lui-même `/api/profile` toutes les 20s et déclenche des notifications OS natives quand un créneau de session est dû (`electron/scheduler.js` contient la logique pure de planification) — ça continue de fonctionner même fenêtre minimisée, puisque fermer la fenêtre la range dans la barre système au lieu de quitter l'app (utilisez le menu de la barre système, « Quitter », pour réellement fermer). Le polling côté renderer (`src/hooks/useNotificationScheduler.ts`) se désactive lui-même dans Electron pour éviter un rappel en double. `electron/preload.js` expose toujours `window.electronAPI.sendNotification` pour le bouton de test manuel de l'en-tête ; l'app se rabat sur l'API Notification du navigateur hors Electron.
-
-## Génération de contenu par IA (optionnel)
-
-Renseignez `GEMINI_API_KEY` dans `.env` (ou saisissez une clé directement dans l'écran d'import) pour activer l'analyse automatique de livres PDF : détection du titre/auteur/domaine, découpage en thèmes pédagogiques progressifs, puis génération des leçons et questions de quiz. Sans clé, l'import PDF ajoute seulement la référence du livre en base, sans génération.
 
 ## Déploiement (Vercel)
 
-1. Importez le dépôt sur [vercel.com/new](https://vercel.com/new) — Next.js est détecté automatiquement, aucune config supplémentaire n'est nécessaire (`vercel.json` inutile).
-2. Dans Project Settings > Environment Variables, ajoutez : `DATABASE_URL`, `DIRECT_URL` (Neon — une base **de production** séparée de votre branche de dev conseillée), `GEMINI_API_KEY` (optionnel), `APP_PASSWORD` et `AUTH_SECRET` (voir ci-dessous, fortement recommandé dès que l'URL est publique).
-3. Déployez. Le build exécute `prisma generate` automatiquement via le script `postinstall`.
-4. Une fois le déploiement en ligne, lancez `npm run db:push` puis `npm run db:seed` **en local** avec le `.env` pointant vers la base Neon de production (le déploiement Vercel ne crée pas les tables tout seul).
+1. Variables d'environnement du projet : `DATABASE_URL`, `DIRECT_URL` (base de production),
+   `GEMINI_API_KEY`, `BLOB_READ_WRITE_TOKEN` (créé avec un store Blob dans l'onglet Storage),
+   `APP_PASSWORD`, `ADMIN_PASSWORD`, `AUTH_SECRET`.
+2. Le build lance `prisma generate` (script `postinstall`). Il ne crée pas les tables :
+   appliquez le schéma avec `npm run db:push` en visant la base de production.
 
-`src/proxy.ts` (le garde-fou mot de passe) tourne nativement sur l'infrastructure Vercel — c'est littéralement la plateforme pour laquelle cette fonctionnalité Next.js est pensée, aucun réglage particulier à faire.
+## Accès et profils
 
-## Déploiement public — protection par mot de passe
+- `APP_PASSWORD` sert de code d'invitation : un testeur entre son prénom et ce code, puis
+  choisit un mot de passe personnel qui protège son espace.
+- `ADMIN_PASSWORD` réserve `/admin` au propriétaire : profils, usage de l'IA, activité,
+  réinitialisation d'un mot de passe, suppression d'un profil.
+- Sans `APP_PASSWORD` (développement local), l'application est ouverte.
+- Chaque livre, thème et leçon n'est visible que par son propriétaire.
 
-SkillForge n'a **aucun système de comptes** (profil unique, `DEFAULT_USER_ID` codé en dur). Avant de déployer sur une URL accessible publiquement, définissez `APP_PASSWORD` (et idéalement `AUTH_SECRET`, voir `.env.example`) : un écran `/login` protège alors toute l'app, y compris chaque route API — sans ça, n'importe qui trouvant l'URL peut utiliser le panneau admin (import PDF, consommant votre quota `GEMINI_API_KEY`) et modifier/supprimer tout le contenu. En local sans `APP_PASSWORD`, l'app reste ouverte sans friction.
+## Application de bureau (facultatif)
+
+`npm run electron` ouvre l'application dans une fenêtre Electron, pour des rappels de séance
+en notifications système (le serveur `npm run dev` doit tourner). C'est un outil de
+développement, sans installateur.
 
 ## Structure
 
-- `src/app/(app)` — espace apprenant (tableau de bord, atelier, bibliothèque, horaires, statistiques, révision)
-- `src/app/admin` — console d'administration (import de contenu, gestion des cours/quiz/utilisateurs)
-- `src/components/mobile` — écrans et coquille de la mise en page mobile, montés directement dans les mêmes routes que la version desktop via `useIsMobile()`
-- `src/lib/ingestion.ts` — extraction PDF et découpage de texte, partagés entre l'analyse et la génération
-- `prisma/schema.prisma` — modèle de données PostgreSQL (domaines, thèmes, leçons, quiz, progression, notifications…)
+- `src/app/(app)` : Aujourd'hui, Bibliothèque (livres, import), thème et leçons, Révision,
+  Statistiques, Réglages.
+- `src/app/admin` : console d'administration.
+- `src/app/api` : routes JSON, toutes vérifiées côté serveur (propriétaire, rôle).
+- `src/lib/import` : extraction de texte, prompts, appels Gemini, file de génération, quota.
+- `src/lib` : logique métier (bibliothèque, apprentissage, statistiques, admin).
+- `src/components` : écrans par domaine et kit d'interface (`components/ui`).
+- `prisma/schema.prisma` : modèle de données.

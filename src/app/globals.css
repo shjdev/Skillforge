@@ -58,9 +58,6 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* Alias temporaires pour les écrans pas encore migrés (supprimés en phase 7) */
-    --font-mono-ui: var(--font-plex-mono);
-    --font-serif-display: var(--font-newsreader);
   }
   body {
     background: var(--color-paper);

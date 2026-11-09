@@ -1,34 +1,40 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
-import { L, EMBER } from '@/lib/theme';
+import { ShjSignature } from '@/components/brand/ShjSignature';
+import { Button } from '@/components/ui/button';
+import { Field, Input } from '@/components/ui/field';
+import { Notice } from '@/components/ui/feedback';
+import { safeNextPath } from '@/lib/safe-redirect';
 
-function LoginContent() {
+function LoginForm() {
   const params = useSearchParams();
-  const next = params.get('next') || '/dashboard';
+  const next = safeNextPath(params.get('next'));
   const isAdminPrompt = params.get('admin') === '1';
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  // Première connexion d'un testeur : le serveur demande un mot de passe personnel.
-  const [needsNewPassword, setNeedsNewPassword] = useState(false);
-  const [authEnabled, setAuthEnabled] = useState(true);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const [name, setName] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  // Première connexion d'un testeur : le serveur demande un mot de passe personnel.
+  const [needsNewPassword, setNeedsNewPassword] = React.useState(false);
+  const [authEnabled, setAuthEnabled] = React.useState(true);
+  const [error, setError] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
     fetch('/api/auth/login')
       .then((r) => r.json())
       .then((d) => {
         if (typeof d.authEnabled === 'boolean') setAuthEnabled(d.authEnabled);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Sans réponse, on garde le formulaire complet : le serveur tranchera à l'envoi.
+      });
   }, []);
 
-  const canSubmit =
-    !loading && (authEnabled ? !!password && (!needsNewPassword || (!!newPassword && !!confirmPassword)) : true);
+  const canSubmit = !loading && (!authEnabled || (!!password && (!needsNewPassword || (!!newPassword && !!confirmPassword))));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,11 +49,7 @@ function LoginContent() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          password,
-          newPassword: needsNewPassword ? newPassword : undefined,
-        }),
+        body: JSON.stringify({ name: name.trim(), password, newPassword: needsNewPassword ? newPassword : undefined }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -56,149 +58,107 @@ function LoginContent() {
       }
       window.location.href = next;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setError(err instanceof Error ? err.message : 'Connexion impossible.');
       setLoading(false);
     }
   };
 
+  const intro = isAdminPrompt
+    ? 'Cet espace est réservé à l’administrateur. Saisissez le mot de passe administrateur.'
+    : needsNewPassword
+      ? 'Première connexion : choisissez un mot de passe personnel. C’est lui qui protégera votre espace ; le code d’invitation ne suffira plus.'
+      : 'Entrez votre prénom et votre mot de passe. Première visite ? Utilisez le code d’invitation reçu.';
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: L.paper, color: L.ink, fontFamily: 'var(--font-mono-ui)' }}>
-      <form onSubmit={handleSubmit} style={{ width: 340, maxWidth: '100%', padding: '0 20px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-          <div style={{ width: 11, height: 11, background: EMBER }} />
-          <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.20em' }}>SKILLFORGE</span>
-        </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+      <div>
+        <h1 className="font-serif text-3xl leading-tight">{isAdminPrompt ? 'Administration' : 'Bon retour'}</h1>
+        <p className="mt-2 text-ink-2">{intro}</p>
+      </div>
 
-        <div style={{ fontSize: 11, color: L.ink2, lineHeight: 1.6, marginBottom: 24 }}>
-          {isAdminPrompt
-            ? 'Accès administrateur requis. Saisissez le mot de passe administrateur.'
-            : needsNewPassword
-              ? "Première connexion : choisissez un mot de passe personnel. C'est lui qui protégera votre espace, le code d'invitation ne suffira plus."
-              : "Entrez votre prénom et votre mot de passe. Première visite ? Utilisez le code d'invitation reçu."}
-        </div>
-
-        {!isAdminPrompt && (
-          <>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>PRÉNOM / PROFIL</div>
-            <input
-              type="text"
+      {!isAdminPrompt && (
+        <Field label="Prénom">
+          {({ id }) => (
+            <Input
+              id={id}
               autoFocus
+              autoComplete="username"
               placeholder="Ex. Lucas"
+              maxLength={60}
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
                 setNeedsNewPassword(false);
               }}
-              style={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                width: '100%',
-                fontSize: 16,
-                borderBottom: `1px solid ${L.ink}`,
-                paddingBottom: 8,
-                marginBottom: 22,
-                cursor: 'text',
-              }}
             />
-          </>
-        )}
+          )}
+        </Field>
+      )}
 
-        {authEnabled && (
-          <>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>
-              {isAdminPrompt ? 'MOT DE PASSE ADMIN' : needsNewPassword ? "CODE D'INVITATION" : "MOT DE PASSE / CODE D'INVITATION"}
-            </div>
-            <input
+      {authEnabled && (
+        <Field label={isAdminPrompt ? 'Mot de passe administrateur' : needsNewPassword ? 'Code d’invitation' : 'Mot de passe ou code d’invitation'}>
+          {({ id }) => (
+            <Input
+              id={id}
               type="password"
               autoFocus={isAdminPrompt}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                width: '100%',
-                fontSize: 20,
-                borderBottom: `1px solid ${L.ink}`,
-                paddingBottom: 8,
-                marginBottom: 22,
-                cursor: 'text',
-              }}
             />
-          </>
-        )}
+          )}
+        </Field>
+      )}
 
-        {authEnabled && needsNewPassword && !isAdminPrompt && (
-          <>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>
-              NOUVEAU MOT DE PASSE PERSONNEL (8 CARACTÈRES MIN.)
-            </div>
-            <input
-              type="password"
-              autoFocus
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              style={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                width: '100%',
-                fontSize: 20,
-                borderBottom: `1px solid ${L.ink}`,
-                paddingBottom: 8,
-                marginBottom: 22,
-                cursor: 'text',
-              }}
-            />
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: L.ink3, marginBottom: 8 }}>CONFIRMER</div>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                width: '100%',
-                fontSize: 20,
-                borderBottom: `1px solid ${L.ink}`,
-                paddingBottom: 8,
-                marginBottom: 22,
-                cursor: 'text',
-              }}
-            />
-          </>
-        )}
+      {authEnabled && needsNewPassword && !isAdminPrompt && (
+        <>
+          <Field label="Nouveau mot de passe" hint="8 caractères minimum.">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                type="password"
+                autoFocus
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            )}
+          </Field>
+          <Field label="Confirmer le mot de passe">
+            {({ id }) => (
+              <Input id={id} type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            )}
+          </Field>
+        </>
+      )}
 
-        {error && <div style={{ fontSize: 11, color: 'oklch(0.62 0.13 30)', marginBottom: 16 }}>{error}</div>}
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          style={{
-            all: 'unset',
-            boxSizing: 'border-box',
-            cursor: !canSubmit ? 'default' : 'pointer',
-            display: 'block',
-            width: '100%',
-            textAlign: 'center',
-            background: L.ink,
-            color: L.paper,
-            fontSize: 12,
-            letterSpacing: '0.16em',
-            padding: '15px 0',
-            opacity: !canSubmit ? 0.6 : 1,
-          }}
-        >
-          {loading ? 'CONNEXION…' : 'ENTRER'}
-        </button>
-      </form>
-    </div>
+      {error && (
+        <Notice tone="danger" title="Connexion refusée">
+          {error}
+        </Notice>
+      )}
+
+      <Button type="submit" variant="accent" size="lg" loading={loading} disabled={!canSubmit} className="w-full">
+        {loading ? 'Connexion…' : 'Entrer'}
+      </Button>
+    </form>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
-      <LoginContent />
-    </Suspense>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-paper px-4 py-12 text-ink">
+      <div className="w-full max-w-sm">
+        <div className="mb-10 flex items-center gap-2.5">
+          <span className="size-3 bg-ember" aria-hidden />
+          <span className="font-mono text-sm font-semibold tracking-[0.2em]">SKILLFORGE</span>
+        </div>
+        <React.Suspense fallback={null}>
+          <LoginForm />
+        </React.Suspense>
+      </div>
+      <ShjSignature className="mt-16" />
+    </main>
   );
 }
