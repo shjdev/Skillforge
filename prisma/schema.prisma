@@ -226,6 +226,9 @@ model ImportJob {
   status           String      @default("ANALYZING") // "ANALYZING" | "REVIEW" | "GENERATING" | "DONE" | "ERROR" | "CANCELLED"
   fileName         String
   fileSize         Int         @default(0)
+  /// Lancé avec la clé Gemini personnelle de l'utilisateur : hors quota, et
+  /// chaque étape de génération doit alors fournir cette clé (jamais celle du serveur).
+  personalKey      Boolean     @default(false)
   /// Texte découpé (string[]), vidé une fois la génération terminée.
   chunks           Json        @default("[]")
   /// Résultat de l'analyse IA (titre, auteur, catégorie, thèmes, plan par extrait).

@@ -81,10 +81,11 @@ export async function createImport(params: {
   fileSize: number;
   buffer: Buffer;
   apiKey: string;
+  personalKey: boolean;
 }): Promise<ImportJob> {
-  const { ownerId, fileName, fileSize, buffer, apiKey } = params;
+  const { ownerId, fileName, fileSize, buffer, apiKey, personalKey } = params;
   const job = await prisma.importJob.create({
-    data: { ownerId, fileName: fileName.slice(0, 200), fileSize, status: 'ANALYZING' },
+    data: { ownerId, fileName: fileName.slice(0, 200), fileSize, personalKey, status: 'ANALYZING' },
   });
 
   try {
@@ -202,9 +203,14 @@ export async function confirmImport(jobId: string, ownerId: string, edits: Confi
  * Génère les leçons de l'extrait courant. Idempotent : si deux appels
  * traitent le même extrait, seul le premier à enregistrer est conservé.
  */
-export async function runStep(jobId: string, ownerId: string, apiKey: string): Promise<ImportJob> {
+export async function runStep(jobId: string, ownerId: string, key: { apiKey: string; personal: boolean }): Promise<ImportJob> {
   const job = await getOwnJob(jobId, ownerId);
   if (job.status !== 'GENERATING' || !job.bookId) return job;
+  // Un import lancé hors quota ne doit jamais basculer sur la clé du serveur.
+  if (job.personalKey && !key.personal) {
+    throw new AppError('Cet import utilise votre clé Gemini personnelle : ajoutez-la de nouveau dans les réglages pour continuer.', 403);
+  }
+  const { apiKey } = key;
 
   const queue = job.queue as unknown as QueueItem[];
   const item = queue[job.cursor];

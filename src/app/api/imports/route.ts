@@ -14,7 +14,8 @@ export const maxDuration = 300;
 
 async function quotaFor(userId: string, isAdmin: boolean, personalKey: boolean) {
   const used = await prisma.importJob.count({
-    where: { ownerId: userId, createdAt: { gte: quotaWindowStart() }, status: { not: 'ERROR' } },
+    // Seuls les imports sur la clé du serveur comptent dans la limite.
+    where: { ownerId: userId, personalKey: false, createdAt: { gte: quotaWindowStart() }, status: { not: 'ERROR' } },
   });
   return quotaStatus({ used, isAdmin, personalKey });
 }
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       throw new AppError('Format non pris en charge : importez un fichier PDF, TXT ou Markdown.');
     }
 
-    const job = await createImport({ ownerId: userId, fileName, fileSize: buffer.length, buffer, apiKey });
+    const job = await createImport({ ownerId: userId, fileName, fileSize: buffer.length, buffer, apiKey, personalKey: personal });
     return NextResponse.json({ job: serializeJob(job) }, { status: 201 });
   } catch (err) {
     return errorResponse(err, "Impossible de lancer l'import.");

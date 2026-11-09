@@ -12,9 +12,9 @@ export async function POST(request: Request, ctx: RouteContext<'/api/imports/[id
   try {
     const { id } = await ctx.params;
     const { userId } = await getSessionContext();
-    const { apiKey } = resolveApiKey(personalKeyFrom(request));
-    if (!apiKey) throw new AppError('Aucune clé IA disponible.', 503);
-    return NextResponse.json({ job: serializeJob(await runStep(id, userId, apiKey)) });
+    const key = resolveApiKey(personalKeyFrom(request));
+    if (!key.apiKey) throw new AppError('Aucune clé IA disponible.', 503);
+    return NextResponse.json({ job: serializeJob(await runStep(id, userId, { apiKey: key.apiKey, personal: key.personal })) });
   } catch (err) {
     return errorResponse(err);
   }
