@@ -46,17 +46,6 @@ export async function getCurrentUserId(): Promise<string> {
   return ctx.userId;
 }
 
-/**
- * Prisma `where` fragment for resources (Domain, Topic, BookReference) that
- * should show the base catalog (ownerId = null) plus items created by the
- * active learner profile.
- */
-export function ownerVisibilityWhere(userId: string) {
-  return {
-    OR: [{ ownerId: null }, { ownerId: userId }],
-  };
-}
-
 export function formatDefaultName(userId: string): string {
   if (userId === DEFAULT_USER_ID) return 'Apprenant SkillForge';
   const raw = userId.replace(/^user-/, '').replace(/-/g, ' ');
@@ -70,7 +59,22 @@ export async function ensureUserProfile(userId: string, preferredName?: string) 
   });
 
   if (!user) {
-    user = await prisma.userProfile.create({
+    user = await createProfile(userId, preferredName);
+  } else if (preferredName?.trim() && user.name === formatDefaultName(userId)) {
+    user = await prisma.userProfile.update({
+      where: { id: userId },
+      data: { name: preferredName.trim() },
+      include: { notificationSettings: true },
+    });
+  }
+
+  return user;
+}
+
+/** Crée le profil ; si une requête parallèle l'a créé entre-temps, le relit. */
+async function createProfile(userId: string, preferredName?: string) {
+  try {
+    return await prisma.userProfile.create({
       data: {
         id: userId,
         name: preferredName?.trim() || formatDefaultName(userId),
@@ -90,13 +94,8 @@ export async function ensureUserProfile(userId: string, preferredName?: string) 
       },
       include: { notificationSettings: true },
     });
-  } else if (preferredName?.trim() && user.name === formatDefaultName(userId)) {
-    user = await prisma.userProfile.update({
-      where: { id: userId },
-      data: { name: preferredName.trim() },
-      include: { notificationSettings: true },
-    });
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'P2002') throw err;
+    return prisma.userProfile.findUniqueOrThrow({ where: { id: userId }, include: { notificationSettings: true } });
   }
-
-  return user;
 }

@@ -8,7 +8,9 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   turbopack: {},
-  /* config options here */
+  // pdf-parse (pdfjs) et son moteur canvas utilisent des API Node natives :
+  // on les charge avec le require de Node au lieu de les empaqueter.
+  serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
 };
 
 export default withPWA(nextConfig);

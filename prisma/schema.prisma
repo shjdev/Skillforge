@@ -1,4 +1,7 @@
-// Prisma Schema for SkillForge (PostgreSQL — Neon)
+// Prisma Schema for SkillForge (PostgreSQL — Neon en prod, Docker en local)
+//
+// Tout le contenu appartient à un utilisateur : Livre → Thèmes → Leçons + Quiz.
+// Aucun catalogue commun. Supprimer un profil supprime tout son contenu.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,130 +11,147 @@ datasource db {
   provider  = "postgresql"
   // Pooled connection (Neon's PgBouncer-compatible endpoint) — used at runtime.
   url       = env("DATABASE_URL")
-  // Direct (unpooled) connection — used by `prisma db push`/`migrate` for DDL,
-  // which doesn't play well with transaction-mode pooling.
+  // Direct (unpooled) connection — used by `prisma db push`/`migrate` for DDL.
   directUrl = env("DIRECT_URL")
 }
 
 model UserProfile {
-  id                      String                  @id @default(uuid())
-  name                    String                  @default("Apprenant")
-  sessionMode             String                  @default("TWO_SESSIONS") // "TWO_SESSIONS" | "ONE_SESSION"
-  morningTime             String                  @default("07:30")
-  eveningTime             String                  @default("20:00")
-  singleSessionTime       String                  @default("19:00")
-  currentActiveDomainId   String?
-  currentActiveTopicId    String?                 // Lock: Only 1 active topic/domain allowed until completed
-  totalXp                 Int                     @default(0)
-  currentStreak           Int                     @default(0)
-  lastSessionDate         String?                 // YYYY-MM-DD
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  id                   String    @id @default(uuid())
+  name                 String    @default("Apprenant")
+  sessionMode          String    @default("TWO_SESSIONS") // "TWO_SESSIONS" | "ONE_SESSION"
+  morningTime          String    @default("07:30")
+  eveningTime          String    @default("20:00")
+  singleSessionTime    String    @default("19:00")
+  /// Un seul thème actif à la fois, jusqu'à la réussite de son quiz.
+  currentActiveTopicId String?
+  totalXp              Int       @default(0)
+  currentStreak        Int       @default(0)
+  lastSessionDate      String? // YYYY-MM-DD
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  progresses              UserProgress[]
-  sessions                UserSession[]
-  quizAttempts            QuizAttempt[]
-  placementResults        PlacementResult[]
-  notificationSettings    NotificationSettings?
+  categories           Category[]
+  books                Book[]
+  topics               Topic[]
+  importJobs           ImportJob[]
+  progresses           UserProgress[]
+  sessions             UserSession[]
+  quizAttempts         QuizAttempt[]
+  notificationSettings NotificationSettings?
+  credential           UserCredential?
 }
 
-model Domain {
-  id               String            @id @default(uuid())
-  name             String
-  slug             String            @unique
-  description      String
-  icon             String            @default("BookOpen")
-  color            String            @default("#3b82f6")
-  order            Int               @default(1)
-  isActive         Boolean           @default(true)
-  ownerId          String?           // null = catalogue commun ; sinon profil ayant importé ce domaine
-
-  topics           Topic[]
-  placementTests   PlacementTest[]
-  placementResults PlacementResult[]
-  knowledgeUpdates KnowledgeUpdate[]
+/// Mot de passe personnel d'un testeur. Table séparée pour que le hash ne
+/// remonte jamais dans les réponses API qui renvoient le profil.
+model UserCredential {
+  userId       String      @id
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String // "scrypt$<salt hex>$<hash hex>"
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
+/// Étiquette de classement, attribuée automatiquement à l'import (ex. « Réseau »).
+model Category {
+  id        String      @id @default(uuid())
+  ownerId   String
+  owner     UserProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime    @default(now())
+
+  books Book[]
+
+  @@unique([ownerId, name])
+}
+
+/// Un fichier importé, transformé en parcours.
+model Book {
+  id         String      @id @default(uuid())
+  ownerId    String
+  owner      UserProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  title      String
+  author     String      @default("")
+  summary    String      @default("")
+  fileName   String      @default("")
+  status     String      @default("GENERATING") // "GENERATING" | "READY" | "ERROR"
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  topics     Topic[]
+  importJobs ImportJob[]
+
+  @@index([ownerId, createdAt])
+}
+
+/// Une partie du livre (un ou plusieurs chapitres), validée par un quiz.
 model Topic {
-  id                 String         @id @default(uuid())
-  domainId           String
-  domain             Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  id                 String      @id @default(uuid())
+  ownerId            String
+  owner              UserProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bookId             String
+  book               Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  slug               String
   name               String
-  slug               String         @unique
-  description        String
-  maxDifficultyLevel Int            @default(5) // 1: Débutant -> 5: Spécialiste
-  estimatedWeeks     Int            @default(1)
-  prerequisites      String         @default("[]") // JSON string of topic slugs
-  ownerId            String?        // null = catalogue commun ; sinon profil ayant importé ce thème
+  description        String      @default("")
+  position           Int // ordre dans le livre, à partir de 1
+  maxDifficultyLevel Int         @default(3) // 1 : débutant → 5 : expert
+  chunkStart         Int // premier extrait du livre couvert (inclus)
+  chunkEnd           Int // dernier extrait couvert (inclus)
+  status             String      @default("PENDING") // "PENDING" | "GENERATING" | "READY" | "ERROR"
 
-  lessons            Lesson[]
-  quizzes            Quiz[]
-  resources          Resource[]
-  userProgresses     UserProgress[]
-}
+  lessons        Lesson[]
+  quiz           Quiz?
+  userProgresses UserProgress[]
 
-model BookReference {
-  id           String   @id @default(uuid())
-  title        String
-  author       String
-  isbn         String?
-  purchaseUrl  String?
-  description  String
-  pdfPath      String?  // Optional local path if user bound a local PDF
-  ownerId      String?  // null = catalogue commun ; sinon profil ayant importé ce livre
-  addedAt      DateTime @default(now())
-
-  lessons      Lesson[]
+  @@unique([ownerId, slug])
+  @@index([bookId, position])
 }
 
 model Lesson {
-  id              String         @id @default(uuid())
+  id              String   @id @default(uuid())
   topicId         String
-  topic           Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
   title           String
-  contentMd       String         // Content in French with English technical terms in parentheses
-  dayNumber       Int            // 1 to 7
-  sessionType     String         // "MORNING" | "EVENING" | "FULL_DAY"
-  difficultyLevel Int            @default(1) // 1 to 5
-  durationMinutes Int            @default(30)
-  keyConcepts     String         @default("[]") // JSON string of array
-  contentSource   String         @default("hybrid") // "manual" | "ai" | "hybrid"
-  
-  bookReferenceId String?
-  bookReference   BookReference? @relation(fields: [bookReferenceId], references: [id], onDelete: SetNull)
-  chapterCitation String?        // e.g. "Chapitre 4, pp. 112-145"
+  contentMd       String
+  dayNumber       Int // jour dans le thème, à partir de 1
+  sessionType     String // "MORNING" (théorie) | "EVENING" (pratique) | "FULL_DAY"
+  difficultyLevel Int      @default(1) // 1 à 5
+  durationMinutes Int      @default(30)
+  keyConcepts     Json     @default("[]") // string[]
+  chapterCitation String?
+  createdAt       DateTime @default(now())
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  userSessions UserSession[]
 
-  userSessions    UserSession[]
+  @@index([topicId, dayNumber])
 }
 
+/// Quiz de validation d'un thème (un par thème).
 model Quiz {
-  id              String         @id @default(uuid())
-  topicId         String
-  topic           Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  title           String
-  difficultyLevel Int            @default(1)
-  passingScore    Int            @default(80) // Percentage
-  quizType        String         @default("WEEKLY") // "WEEKLY" | "PLACEMENT"
+  id           String         @id @default(uuid())
+  topicId      String         @unique
+  topic        Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title        String
+  passingScore Int            @default(80) // pourcentage
 
-  questions       QuizQuestion[]
-  quizAttempts    QuizAttempt[]
+  questions    QuizQuestion[]
+  quizAttempts QuizAttempt[]
 }
 
 model QuizQuestion {
-  id            String   @id @default(uuid())
-  quizId        String?
-  quiz          Quiz?    @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  placementTestId String?
-  placementTest PlacementTest? @relation(fields: [placementTestId], references: [id], onDelete: Cascade)
+  id            String @id @default(uuid())
+  quizId        String
+  quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  dayNumber     Int    @default(1) // jour du thème dont la question est issue
   questionText  String
-  options       String   // JSON string of options array e.g. ["A", "B", "C", "D"]
+  options       Json // string[]
   correctAnswer String
-  explanation   String
-  points        Int      @default(10)
-  questionType  String   @default("MCQ") // "MCQ" | "TRUE_FALSE" | "CODE" | "OPEN"
+  explanation   String @default("")
+  points        Int    @default(10)
+
+  @@index([quizId])
 }
 
 model QuizAttempt {
@@ -144,82 +164,43 @@ model QuizAttempt {
   maxScore    Int
   percentage  Float
   passed      Boolean
-  answers     String      // JSON string of user answers
+  answers     Json // { [questionId]: réponse choisie }
   attemptedAt DateTime    @default(now())
-}
 
-model PlacementTest {
-  id              String            @id @default(uuid())
-  domainId        String
-  domain          Domain            @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  title           String
-  description     String
-  questionCount   Int               @default(15)
-  levelThresholds String            @default("{\"1\":0,\"2\":40,\"3\":60,\"4\":80,\"5\":90}") // JSON string
-
-  questions       QuizQuestion[]
-  results         PlacementResult[]
-}
-
-model PlacementResult {
-  id              String        @id @default(uuid())
-  userId          String
-  user            UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  domainId        String
-  domain          Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  placementTestId String
-  placementTest   PlacementTest @relation(fields: [placementTestId], references: [id], onDelete: Cascade)
-  score           Int
-  assignedLevel   Int           // 1 to 5
-  takenAt         DateTime      @default(now())
+  @@index([userId, quizId])
 }
 
 model UserProgress {
-  id              String      @id @default(uuid())
-  userId          String
-  user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topicId         String
-  topic           Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  currentWeek     Int         @default(1)
-  currentDay      Int         @default(1)
-  difficultyLevel Int         @default(1)
-  status          String      @default("IN_PROGRESS") // "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "MASTERED"
-  completionPct   Float       @default(0.0)
-  startedAt       DateTime    @default(now())
-  completedAt     DateTime?
+  id            String      @id @default(uuid())
+  userId        String
+  user          UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId       String
+  topic         Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  currentDay    Int         @default(1)
+  status        String      @default("IN_PROGRESS") // "IN_PROGRESS" | "COMPLETED"
+  completionPct Float       @default(0)
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
 
   @@unique([userId, topicId])
 }
 
+/// Une leçon faite par l'apprenant.
 model UserSession {
   id              String      @id @default(uuid())
   userId          String
   user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
   lessonId        String
   lesson          Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  sessionType     String      // "MORNING" | "EVENING" | "ACCUMULATED"
+  sessionType     String // "MORNING" | "EVENING" | "ACCUMULATED"
   scheduledAt     DateTime
-  startedAt       DateTime?
   completedAt     DateTime?
   durationSeconds Int         @default(0)
   completed       Boolean     @default(false)
   wasAccumulated  Boolean     @default(false)
   notes           String?
-}
 
-model Resource {
-  id              String   @id @default(uuid())
-  topicId         String?
-  topic           Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  title           String
-  type            String   // "PDF" | "URL" | "ARTICLE"
-  localPath       String?
-  url             String?
-  description     String?
-  author          String?
-  difficultyLevel Int      @default(1)
-  tags            String   @default("[]") // JSON string
-  addedAt         DateTime @default(now())
+  @@index([userId, completed, completedAt])
 }
 
 model NotificationSettings {
@@ -234,35 +215,34 @@ model NotificationSettings {
   streakReminder       Boolean     @default(true)
 }
 
-model KnowledgeUpdate {
-  id         String   @id @default(uuid())
-  domainId   String
-  domain     Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  updatedAt  DateTime @default(now())
-  updateType String   @default("MONTHLY") // "MONTHLY" | "MANUAL" | "AI"
-  changelog  String
-}
+/// Import d'un fichier, de l'analyse à la fin de la génération. Garde le
+/// texte découpé et la file des extraits à générer pour pouvoir reprendre.
+model ImportJob {
+  id               String      @id @default(uuid())
+  ownerId          String
+  owner            UserProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bookId           String?
+  book             Book?       @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  status           String      @default("ANALYZING") // "ANALYZING" | "REVIEW" | "GENERATING" | "DONE" | "ERROR" | "CANCELLED"
+  fileName         String
+  fileSize         Int         @default(0)
+  /// Texte découpé (string[]), vidé une fois la génération terminée.
+  chunks           Json        @default("[]")
+  /// Résultat de l'analyse IA (titre, auteur, catégorie, thèmes, plan par extrait).
+  analysis         Json?
+  /// File des extraits à générer : [{ topicId, chunk, dayNumber }]
+  queue            Json        @default("[]")
+  cursor           Int         @default(0)
+  /// Échecs consécutifs sur l'extrait courant (au-delà de 3, il est ignoré).
+  failures         Int         @default(0)
+  skippedChunks    Json        @default("[]") // number[]
+  /// Dernière leçon théorique générée, pour la continuité d'un jour à l'autre.
+  lastGenerated    Json?
+  lessonsCreated   Int         @default(0)
+  questionsCreated Int         @default(0)
+  error            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-model IngestJob {
-  id               String   @id @default(uuid())
-  status           String   @default("PENDING") // "PENDING" | "RUNNING" | "DONE" | "ERROR"
-  bookTitle        String
-  topicName        String   @default("")
-  totalChunks      Int      @default(0)
-  processedChunks  Int      @default(0)
-  lessonsCreated   Int      @default(0)
-  questionsCreated Int      @default(0)
-  message          String?
-  ownerId          String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
-
-// Mot de passe personnel d'un testeur. Table séparée de UserProfile pour que le
-// hash ne remonte jamais dans les réponses API qui renvoient le profil.
-model UserCredential {
-  userId       String   @id // = UserProfile.id (référence lâche, comme ownerId)
-  passwordHash String   // "scrypt$<salt hex>$<hash hex>"
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  @@index([ownerId, createdAt])
 }

@@ -238,11 +238,15 @@ Vercel testé ; fusion dans `main` et prod migrée.
 | Signature SHJ | Symbole « Signal » du kit SHJ, discret : pied de la barre latérale (« Un projet SHJ »), page de connexion, pied de l'admin | Demandé au gate. Couleurs du kit respectées (vert lagune #0B5D57, cuivre réservé à l'onde) ; coupe « petit » sous 32 px ; jamais déformé ni recoloré. Le favicon reste celui de SkillForge. |
 | Coût IA | Clé Gemini serveur + quota de 3 livres par jour et par utilisateur + taille max ; clé personnelle optionnelle | Validé au gate. |
 | Livraison | Branche `refonte-contenu-utilisateur` + aperçu Vercel, fusion dans `main` à la fin | Validé au gate. |
+| Admin | Même coquille que l'app, lien « Administration » pour l'admin | Pas de second thème sombre à maintenir. |
+| Recherche | Déplacée dans la page Révision | La barre de recherche d'en-tête disparaît avec l'en-tête. |
+| Police du texte | Inter pour le corps, Newsreader pour les titres, Plex Mono pour les étiquettes | Lisibilité du corps de texte. |
+| Accès au contenu | Strictement réservé au propriétaire, admin compris (ownership.ts supprimé) | Chacun ne voit que ses livres ; règle unique et simple. |
+| Fichier importé | Déposé sous imports/<userId>/ sur Vercel Blob, relu puis supprimé par le serveur | Plus de suppression côté client non authentifiée ; un utilisateur ne peut pas importer le fichier d'un autre. |
+| Clé Gemini personnelle | Gardée dans le navigateur, envoyée en en-tête, jamais stockée | Pas de secret utilisateur en base. |
 
 ## Pas encore spécifié
 
-- Phase 2 : le découpage exact des prompts d'analyse et de génération sera revu à
-  la reprise de la phase (qualité des leçons sur un vrai livre).
 - Phase 7 : brouillard — l'ordre exact de la migration prod dépend de l'état de la
   prod au moment de la fusion.
 
@@ -257,9 +261,9 @@ Vercel testé ; fusion dans `main` et prod migrée.
 
 | Phase | Statut |
 | --- | --- |
-| 0 Fondations | À faire |
-| 1 Modèle de données | À faire |
-| 2 Import | À faire |
+| 0 Fondations | Fait (1d0e0ca) |
+| 1 Modèle de données | Fait : schéma appliqué en local, anciennes routes supprimées |
+| 2 Import | Fait : pipeline + écran d'import, vérifié sur un vrai PDF (analyse 4 thèmes / 14 jours, génération jour par jour) |
 | 3 Bibliothèque | À faire |
 | 4 Apprentissage | À faire |
 | 5 Révision, stats, réglages | À faire |
